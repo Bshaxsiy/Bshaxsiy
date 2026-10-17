@@ -136,3 +136,31 @@ async def download_instagram_video(url: str) -> Dict[str, Any]:
     Botning boshqa foydalanuvchilar bilan ishlashini to'xtatib qo'ymaslik uchun thread pool da bajariladi.
     """
     return await asyncio.to_thread(_sync_download, url)
+
+
+def _sync_extract_audio(video_path: str) -> str:
+    """Videodan MP3 audioni ajratib olish (FFmpeg orqali)"""
+    unique_id = uuid.uuid4().hex[:8]
+    mp3_path = DOWNLOADS_DIR / f"audio_{unique_id}.mp3"
+    ffmpeg_path = _get_ffmpeg_path() or "ffmpeg"
+
+    import subprocess
+    cmd = [
+        ffmpeg_path,
+        "-y",
+        "-i", video_path,
+        "-vn",
+        "-c:a", "libmp3lame",
+        "-q:a", "2",
+        str(mp3_path)
+    ]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if res.returncode != 0:
+        raise DownloadException("Videodan audio ajratib olishda xatolik yuz berdi.")
+    return str(mp3_path)
+
+
+async def extract_audio_from_video(video_path: str) -> str:
+    """Videodan MP3 formatida audioni ajratib olish (asinxron)"""
+    return await asyncio.to_thread(_sync_extract_audio, video_path)
+

@@ -3,7 +3,9 @@ import os
 import re
 import uuid
 import logging
+from datetime import datetime
 from pathlib import Path
+from typing import Optional, Dict, Any, List
 
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
@@ -23,6 +25,7 @@ import config
 from config import DOWNLOADS_DIR, BASE_DIR
 from downloader import (
     download_instagram_video,
+    extract_audio_from_video,
     DownloadException,
     FileTooLargeError,
     PrivateMediaError,
@@ -30,7 +33,13 @@ from downloader import (
 from video_converter import convert_to_video_note
 from ai_service import ai_service
 from tts_service import convert_text_to_voice_and_audio
-from document_service import generate_docx, generate_pdf
+from document_service import (
+    generate_docx,
+    generate_pdf,
+    generate_presentation,
+    generate_excel,
+    extract_text_from_file,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -41,66 +50,119 @@ INSTAGRAM_URL_REGEX = re.compile(
     re.IGNORECASE
 )
 
-# AI rejimida bo'lgan foydalanuvchilar to'plami
-ai_active_users: set[int] = set()
+# Foydalanuvchilarning hozirgi faol bo'limi (user_id -> mode)
+# Rejimlar: "NORMAL", "DOC_ANALYSIS", "DEEP_RESEARCH", "MEDIA", "SLIDES", "OFFICE_DOCS", "AI_CHAT"
+user_active_mode: dict[int, str] = {}
 
-# Format tanlash kutilayotgan audio xabarlar: audio_id -> {user_id, file_id, mime_type, caption}
+# Format tanlash kutilayotgan audio xabarlar: audio_id -> {user_id, user_name, file_id, mime_type, caption}
 pending_audio: dict[str, dict] = {}
+
+# Bo'limlarga o'tkazish va tahrirlash uchun natijalar kesh xotirasi (res_id -> {title, content, user_name})
+result_store: dict[str, dict] = {}
+
+
+def store_result(title: str, content: str, user_name: str = "") -> str:
+    """Natijani xotiraga saqlash va res_id qaytarish"""
+    res_id = uuid.uuid4().hex[:8]
+    result_store[res_id] = {
+        "title": title or "Tahlil Natijasi",
+        "content": content,
+        "user_name": user_name,
+        "created_at": datetime.now()
+    }
+    if len(result_store) > 400:
+        oldest_key = next(iter(result_store))
+        result_store.pop(oldest_key, None)
+    return res_id
 
 
 def get_main_keyboard() -> ReplyKeyboardMarkup:
-    """Asosiy menyu tugmalari"""
+    """Asosiy bo'limlar menyusi"""
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="🤖 AI Chat"),
-                KeyboardButton(text="📥 Instagram Yuklash")
+                KeyboardButton(text="📑 Hujjatlar tahlili"),
+                KeyboardButton(text="🔬 Deep Research")
             ],
             [
-                KeyboardButton(text="🔘 Dumaloq Video"),
-                KeyboardButton(text="ℹ️ Yordam")
+                KeyboardButton(text="🎬 Musiqa va Video"),
+                KeyboardButton(text="📽 Slaydlar, Prezentatsiya")
+            ],
+            [
+                KeyboardButton(text="📊 PDF, WORD, EXCEL"),
+                KeyboardButton(text="🤖 AI Chat")
+            ],
+            [
+                KeyboardButton(text="ℹ️ Yordam"),
+                KeyboardButton(text="🏠 Bosh menyu")
             ]
         ],
         resize_keyboard=True
     )
 
 
-def get_ai_keyboard() -> ReplyKeyboardMarkup:
-    """AI Chat rejimi uchun tugmalar"""
+def get_section_keyboard() -> ReplyKeyboardMarkup:
+    """Bo'lim ichidagi qulay boshqaruv menyusi"""
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="🔄 Yangi suhbat (/clear)"),
-                KeyboardButton(text="❌ AI rejimdan chiqish")
+                KeyboardButton(text="🔄 Yangi so'rov"),
+                KeyboardButton(text="🏠 Bosh menyu")
             ]
         ],
         resize_keyboard=True
     )
 
 
-def get_ai_inline_button() -> InlineKeyboardMarkup:
-    """AI chatni boshlash uchun inline tugma"""
+def get_content_actions_keyboard(res_id: str) -> InlineKeyboardMarkup:
+    """Har bir natija tagida bo'limga o'tkazish va tahrirlash tugmalari"""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="🤖 AI Chatni boshlash",
-                    callback_data="start_ai_chat"
-                )
+                InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{res_id}"),
+                InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{res_id}")
             ]
         ]
     )
 
 
-def get_circle_button() -> InlineKeyboardMarkup:
-    """Videoni dumaloq formatga o'tkazish uchun tugma"""
+def get_transfer_keyboard(res_id: str) -> InlineKeyboardMarkup:
+    """Natijani tegishli bo'limlarga o'tkazish tanlovlari"""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="🔘 Dumaloq video (Video Note) qilish",
-                    callback_data="make_circle"
-                )
+                InlineKeyboardButton(text="📄 Word (.docx)", callback_data=f"tr:docx:{res_id}"),
+                InlineKeyboardButton(text="📑 PDF (.pdf)", callback_data=f"tr:pdf:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📊 Excel (.xlsx)", callback_data=f"tr:xlsx:{res_id}"),
+                InlineKeyboardButton(text="📽 Prezentatsiya (.pptx)", callback_data=f"tr:pptx:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔬 Deep Research", callback_data=f"tr:deep:{res_id}"),
+                InlineKeyboardButton(text="🎙 Ovozli qilish (TTS)", callback_data=f"tr:voice:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"act:back:{res_id}")
+            ]
+        ]
+    )
+
+
+def get_edit_keyboard(res_id: str) -> InlineKeyboardMarkup:
+    """Natijani tahrirlash va qayta ishlash tanlovlari"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Kengaytirish", callback_data=f"ed:expand:{res_id}"),
+                InlineKeyboardButton(text="✂️ Qisqartirish", callback_data=f"ed:summary:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Qayta yozish", callback_data=f"ed:rewrite:{res_id}"),
+                InlineKeyboardButton(text="🇺🇿 O'zbekchaga o'girish", callback_data=f"ed:truz:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"act:back:{res_id}")
             ]
         ]
     )
@@ -111,36 +173,33 @@ def get_audio_choice_keyboard(audio_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="📝 Matn",
-                    callback_data=f"aud_mode:text:{audio_id}"
-                ),
-                InlineKeyboardButton(
-                    text="🎙 Ovozli (Audio)",
-                    callback_data=f"aud_mode:voice:{audio_id}"
-                )
+                InlineKeyboardButton(text="📝 Matn", callback_data=f"aud_mode:text:{audio_id}"),
+                InlineKeyboardButton(text="🎙 Ovozli (Audio)", callback_data=f"aud_mode:voice:{audio_id}")
             ],
             [
-                InlineKeyboardButton(
-                    text="📄 Word (.docx)",
-                    callback_data=f"aud_mode:docx:{audio_id}"
-                ),
-                InlineKeyboardButton(
-                    text="📑 PDF (.pdf)",
-                    callback_data=f"aud_mode:pdf:{audio_id}"
-                )
+                InlineKeyboardButton(text="📄 Word (.docx)", callback_data=f"aud_mode:docx:{audio_id}"),
+                InlineKeyboardButton(text="📑 PDF (.pdf)", callback_data=f"aud_mode:pdf:{audio_id}")
             ],
             [
-                InlineKeyboardButton(
-                    text="✨ Barchasi birga (Hammasi)",
-                    callback_data=f"aud_mode:all:{audio_id}"
-                )
+                InlineKeyboardButton(text="✨ Barchasi birga (Hammasi)", callback_data=f"aud_mode:all:{audio_id}")
             ],
             [
-                InlineKeyboardButton(
-                    text="❌ Bekor qilish",
-                    callback_data=f"aud_mode:cancel:{audio_id}"
-                )
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"aud_mode:cancel:{audio_id}")
+            ]
+        ]
+    )
+
+
+def get_video_options_keyboard(video_path: str) -> InlineKeyboardMarkup:
+    """Video yuklanganda dumaloq qilish yoki MP3 audio ajratish"""
+    v_id = uuid.uuid4().hex[:8]
+    # Yo'lni saqlash
+    pending_audio[f"vid_{v_id}"] = {"path": video_path}
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔘 Dumaloq video qilish", callback_data=f"vid:circle:{v_id}"),
+                InlineKeyboardButton(text="🎵 MP3 audio ajratish", callback_data=f"vid:audio:{v_id}")
             ]
         ]
     )
@@ -161,39 +220,52 @@ def save_gemini_key_to_env(key: str):
     env_path.write_text(content, encoding="utf-8")
 
 
-async def send_ai_response(message: Message, response_text: str):
-    """Javobni xavfsiz formatda jo'natish (4096 belgi limitini inobatga olgan holda)"""
+async def send_ai_response(message: Message, response_text: str, res_id: Optional[str] = None):
+    """Javobni xavfsiz formatda va harakat tugmalari bilan jo'natish"""
     if not response_text:
         await message.reply("Javob bo'sh qaytdi.")
         return
 
+    reply_markup = get_content_actions_keyboard(res_id) if res_id else None
     max_len = 4000
     chunks = [response_text[i:i + max_len] for i in range(0, len(response_text), max_len)]
-    for chunk in chunks:
+
+    for idx, chunk in enumerate(chunks):
+        is_last = (idx == len(chunks) - 1)
+        current_markup = reply_markup if is_last else None
         try:
-            await message.answer(chunk, parse_mode="Markdown")
+            await message.answer(chunk, parse_mode="Markdown", reply_markup=current_markup)
         except TelegramBadRequest:
             try:
-                await message.answer(chunk, parse_mode="HTML")
+                await message.answer(chunk, parse_mode="HTML", reply_markup=current_markup)
             except TelegramBadRequest:
-                await message.answer(chunk, parse_mode=None)
+                await message.answer(chunk, parse_mode=None, reply_markup=current_markup)
 
+
+# =====================================================================
+# ASOSIY BUYRUQLAR VA BO'LIMLARGA O'TISH
+# =====================================================================
 
 @router.message(CommandStart())
+@router.message(F.text == "🏠 Bosh menyu")
 async def handle_start(message: Message):
-    """
-    /start buyrug'i uchun javob
-    """
+    """Bosh menyu"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "NORMAL"
     user_name = message.from_user.first_name if message.from_user else "Foydalanuvchi"
+
     welcome_text = (
         f"👋 Assalomu alaykum, <b>{user_name}</b>!\n\n"
-        "🌟 <b>Ko'p funksiyali Telegram Bot</b>ga xush kelibsiz!\n\n"
-        "<b>Botning asosiy imkoniyatlari:</b>\n"
-        "1. 🤖 <b>Gemini AI Chat:</b> Istalgan mavzuda suhbatlashing, savollarga javob oling yoki rasm yuborib tahlil qildiring.\n"
-        "2. 🎙 <b>Audio & Ovozli Xabar Tahlili:</b> Ovozli xabar yuboring va natijani <b>Matn</b>, <b>Ovozli</b>, <b>Word (.docx)</b> yoki <b>PDF (.pdf)</b> shaklida oling!\n"
-        "3. 📥 <b>Instagram Video Yuklash:</b> Reels, IGTV yoki post havolasini yuboring.\n"
-        "4. 🔘 <b>Dumaloq Video (Video Note):</b> To'rtburchak videoni yuboring — bot uni Telegram doiraviy videosiga (krujok) aylantirib beradi!\n\n"
-        "👇 <i>Kerakli bo'limni quyidagi menyudan tanlang:</i>"
+        "🌟 <b>Ko'p funksiyali Intellektual Bot</b>ga xush kelibsiz!\n\n"
+        "<b>Botning asosiy bo'limlari:</b>\n"
+        "1. 📑 <b>Hujjatlar tahlili:</b> PDF, Word, Excel, TXT fayllarni chuqur o'rganish va hisobot olish.\n"
+        "2. 🔬 <b>Deep Research:</b> Istalgan mavzuda to'liq ilmiy va tahliliy izlanish hisoboti.\n"
+        "3. 🎬 <b>Musiqa va Video:</b> Instagram/video yuklash, dumaloq video (krujok) va MP3 ajratish.\n"
+        "4. 📽 <b>Slaydlar, Prezentatsiya:</b> Mavzudan professional PowerPoint (<code>.pptx</code>) taqdimot yaratish.\n"
+        "5. 📊 <b>PDF, WORD, EXCEL:</b> Hujjatlarni generatsiya qilish va jadvallar tuzish.\n"
+        "6. 🤖 <b>AI Chat:</b> Erkin muloqot va maslahatlar.\n\n"
+        "💡 <i>Har qanday tahlil natijasini boshqa bo'limlarga o'tkazishingiz yoki tahrirlashingiz mumkin!</i>\n\n"
+        "👇 <i>Kerakli bo'limni tanlang:</i>"
     )
     await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -201,167 +273,228 @@ async def handle_start(message: Message):
 @router.message(F.text == "ℹ️ Yordam")
 @router.message(Command("help"))
 async def handle_help(message: Message):
-    """
-    /help buyrug'i uchun javob
-    """
+    """Qo'llanma"""
     help_text = (
-        "📖 <b>Botdan foydalanish qo'llanmasi:</b>\n\n"
-        "🤖 <b>1. Gemini AI Chat:</b>\n"
-        "• <b>«🤖 AI Chat»</b> tugmasini bosing yoki <code>/ai</code> yuboring — AI rejimiga o'tasiz.\n"
-        "• Rasm yuborsangiz, AI uni tahlil qilib javob beradi.\n"
-        "• Tezkor savol berish: <code>/ai Siz haqingizda aytib bering</code>\n"
-        "• Tarixni tozalash: <code>/clear</code> | Rejimdan chiqish: <code>/exit</code>\n\n"
-        "🎙 <b>2. Ovozli (Audio) xabarlar tahlili:</b>\n"
-        "• Menga ovozli xabar (voice) yoki audio fayl jo'nating.\n"
-        "• Bot sizga <b>📝 Matn</b>, <b>🎙 Ovoz</b>, <b>📄 Word (.docx)</b> yoki <b>📑 PDF (.pdf)</b> shaklida hisobot olish tanlovini beradi!\n\n"
-        "📥 <b>3. Instagram Video Yuklash:</b>\n"
-        "• Instagram video/reels havolasini yuboring.\n\n"
-        "🔘 <b>4. Dumaloq video (Video Note) tayyorlash:</b>\n"
-        "• Telefoningizdagi videoni botga yuboring yoki yuklangan video tagidagi tugmani bosing.\n\n"
-        "🔑 <b>API Kalit sozlash:</b>\n"
-        "• Gemini API kalitini o'rnatish uchun: <code>/setkey SIZNING_KALITINGIZ</code>"
+        "📖 <b>Bot bo'limlaridan foydalanish qo'llanmasi:</b>\n\n"
+        "📑 <b>1. Hujjatlar tahlili:</b>\n"
+        "PDF, Word (.docx), Excel (.xlsx) yoki matnli fayl jo'nating. AI barcha muhim bandlarni, sanalar va raqamlarni tahlil qilib beradi.\n\n"
+        "🔬 <b>2. Deep Research (Chuqur Izlanish):</b>\n"
+        "Istalgan savol yoki mavzuni yuboring. AI keng qamrovli tahlil, statistika va strategik yechimlardan iborat to'liq hisobot tuzadi.\n\n"
+        "🎬 <b>3. Musiqa va Video:</b>\n"
+        "• Instagram havolasini yuboring -> videoni yuklab beradi.\n"
+        "• Video yuboring -> dumaloq (Video Note) yoki MP3 audio qilib beradi.\n\n"
+        "📽 <b>4. Slaydlar, Prezentatsiya:</b>\n"
+        "Mavzu yoki matn yuboring -> bot tayyor <code>.pptx</code> PowerPoint taqdimotini yaratib beradi.\n\n"
+        "📊 <b>5. PDF, WORD, EXCEL:</b>\n"
+        "Matn yuborib uni chiroyli formatlangan Word, PDF yoki Excel jadvali sifatida yuklab oling.\n\n"
+        "🔁 <b>O'tkazish va Tahrirlash:</b>\n"
+        "Har bir natija ostidagi <b>«📂 Bo'limga o'tkazish»</b> tugmasi orqali hisobotni boshqa formatga o'tkazishingiz, <b>«✏️ Tahrirlash»</b> orqali kengaytirishingiz mumkin!"
     )
     await message.answer(help_text, parse_mode="HTML")
 
 
-@router.message(F.text == "📥 Instagram Yuklash")
-async def handle_instagram_menu(message: Message):
+@router.message(F.text == "📑 Hujjatlar tahlili")
+async def nav_doc_analysis(message: Message):
+    user_active_mode[message.from_user.id] = "DOC_ANALYSIS"
     await message.answer(
-        "📥 <b>Instagram video yuklash:</b>\n\n"
-        "Menga Instagram Reels, IGTV yoki video post havolasini yuboring. Men uni yuklab beraman!",
-        parse_mode="HTML"
+        "📑 <b>Hujjatlar tahlili bo'limi</b>\n\n"
+        "Menga istalgan <b>PDF, Word (.docx), Excel (.xlsx)</b> yoki <b>matnli fayl</b> jo'nating.\n\n"
+        "AI hujjatni diqqat bilan o'rganib:\n"
+        "• Asosiy maqsad va qisqacha mazmunini\n"
+        "• Eng muhim shartlar va qoidalarni\n"
+        "• Sanalar, summalar va majburiyatlarni\n"
+        "• Tavsiyalar va xulosalarni chiqarib beradi.\n\n"
+        "📤 <i>Hujjatni fayl shaklida yuborishingiz mumkin:</i>",
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard()
     )
 
 
-@router.message(F.text == "🔘 Dumaloq Video")
-async def handle_circle_video_menu(message: Message):
+@router.message(F.text == "🔬 Deep Research")
+async def nav_deep_research(message: Message):
+    user_active_mode[message.from_user.id] = "DEEP_RESEARCH"
     await message.answer(
-        "🔘 <b>Dumaloq video (Video Note) tayyorlash:</b>\n\n"
-        "Istalgan to'rtburchak videoni botga yuboring. Bot uni avtomatik tarzda Telegram dumaloq videosiga (krujok) aylantirib beradi (maksimal 60 soniya).",
-        parse_mode="HTML"
+        "🔬 <b>Deep Research (Chuqur Izlanish) bo'limi</b>\n\n"
+        "O'zingizni qiziqtirgan istalgan mavzu, soha, loyiha, tahliliy savol yoki biznes g'oyani yozing.\n\n"
+        "AI quyidagi tuzilishda to'liq professional hisobot tayyorlaydi:\n"
+        "1. 📌 Kirish va Mavzuning Dolzarbligi\n"
+        "2. 🔍 Chuqur Tahlil va Mexanizmlar\n"
+        "3. 📊 Asosiy Ko'rsatkichlar va Statistika\n"
+        "4. ⚠️ Xatarlar va Muammolar\n"
+        "5. 💡 Strategik Yechimlar va Tavsiyalar\n\n"
+        "✍️ <i>Tadqiqot mavzusini yozib qoldiring:</i>",
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard()
     )
 
 
-@router.message(Command("setkey"))
-async def handle_setkey_command(message: Message):
-    """
-    Gemini API kalitini chat orqali sozlash
-    """
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2 or not parts[1].strip():
-        await message.reply(
-            "ℹ️ <b>Foydalanish:</b> <code>/setkey SIZNING_GEMINI_API_KALITINGIZ</code>\n\n"
-            "Misol:\n<code>/setkey AIzaSyC...</code>\n\n"
-            "🔑 API kalitni bepul olish: https://aistudio.google.com/app/apikey",
-            parse_mode="HTML"
-        )
-        return
+@router.message(F.text == "🎬 Musiqa va Video")
+async def nav_media(message: Message):
+    user_active_mode[message.from_user.id] = "MEDIA"
+    await message.answer(
+        "🎬 <b>Musiqa va Video bo'limi</b>\n\n"
+        "• 📥 <b>Instagram video:</b> Reels yoki video post havolasini yuboring.\n"
+        "• 🔘 <b>Dumaloq video (krujok):</b> Telefoningizdagi videoni yuboring.\n"
+        "• 🎵 <b>MP3 ajratish:</b> Istalgan videoni yuboring va uning audiosini MP3 qilib oling.\n\n"
+        "Havola yoki video yuboring:",
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard()
+    )
 
-    new_key = parts[1].strip()
-    ai_service.update_api_key(new_key)
-    try:
-        save_gemini_key_to_env(new_key)
-        await message.reply(
-            "✅ <b>Gemini API kaliti muvaffaqiyatli saqlandi va faollashtirildi!</b>\n\n"
-            "Endi <b>«🤖 AI Chat»</b> bo'limi orqali sun'iy intellektdan to'liq foydalanishingiz mumkin.",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        logger.error(f".env ga saqlashda xatolik: {e}")
-        await message.reply("✅ Kalit vaqtincha xotiraga yuklandi, ammo .env ga yozishda muammo bo'ldi.")
+
+@router.message(F.text == "📽 Slaydlar, Prezentatsiya")
+async def nav_slides(message: Message):
+    user_active_mode[message.from_user.id] = "SLIDES"
+    await message.answer(
+        "📽 <b>Slaydlar va Prezentatsiya bo'limi</b>\n\n"
+        "Mavzu, reja yoki tayyor matnni yozib qoldiring.\n\n"
+        "AI uni to'liq PowerPoint (<code>.pptx</code>) taqdimotiga aylantirib, chiroyli titul va mazmunli slaydlari bilan tayyor fayl shaklida yuboradi!\n\n"
+        "✍️ <i>Prezentatsiya mavzusini yuboring:</i>",
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard()
+    )
+
+
+@router.message(F.text == "📊 PDF, WORD, EXCEL")
+async def nav_office_docs(message: Message):
+    user_active_mode[message.from_user.id] = "OFFICE_DOCS"
+    await message.answer(
+        "📊 <b>PDF, WORD, EXCEL Generator bo'limi</b>\n\n"
+        "Istalgan ma'lumot, matn, hisobot yoki jadval g'oyasini yozing.\n"
+        "Biz uni:\n"
+        "• 📄 <b>Word (.docx)</b>\n"
+        "• 📑 <b>PDF (.pdf)</b>\n"
+        "• 📊 <b>Excel (.xlsx)</b> jadvaliga aylantirib beramiz!\n\n"
+        "✍️ <i>Hujjat yaratmoqchi bo'lgan matningizni yuboring:</i>",
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard()
+    )
 
 
 @router.message(F.text == "🤖 AI Chat")
 @router.message(Command("ai"))
-async def handle_ai_entry_or_prompt(message: Message):
-    """
-    AI Chat rejimiga kirish yoki /ai orqali bir martalik savol berish
-    """
-    user_id = message.from_user.id
+async def nav_ai_chat(message: Message):
+    user_active_mode[message.from_user.id] = "AI_CHAT"
     text = message.text or ""
 
-    # Agar /ai <savol> shaklida bo'lsa
     if text.startswith("/ai"):
         parts = text.split(maxsplit=1)
         if len(parts) > 1 and parts[1].strip():
             prompt = parts[1].strip()
             status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
             await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
-            response = await ai_service.ask_gemini(user_id=user_id, prompt=prompt)
+            response = await ai_service.ask_gemini(user_id=message.from_user.id, prompt=prompt)
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-            await send_ai_response(message, response)
+            res_id = store_result(title=prompt[:30], content=response, user_name=message.from_user.full_name)
+            await send_ai_response(message, response, res_id=res_id)
             return
 
-    # Aks holda AI rejimiga o'tkazish
-    ai_active_users.add(user_id)
     await message.answer(
         "🤖 <b>Gemini AI Chat faollashtirildi!</b>\n\n"
-        "Menga istalgan savol, matn, rasm yoki ovozli xabar yuborishingiz mumkin. "
-        "Men siz bilan muloqot qilaman va suhbat tarixini eslab qolaman!\n\n"
-        "• 🔄 Suhbat tarixini tozalash: <code>/clear</code>\n"
-        "• ❌ Chiqish: <code>/exit</code> yoki pastdagi tugma",
-        parse_mode="HTML",
-        reply_markup=get_ai_keyboard()
-    )
-
-
-@router.callback_query(F.data == "start_ai_chat")
-async def handle_start_ai_callback(callback: CallbackQuery):
-    """Inline tugma orqali AI chatni boshlash"""
-    user_id = callback.from_user.id
-    ai_active_users.add(user_id)
-    await callback.answer("🤖 AI Chat faollashtirildi!")
-    await callback.message.answer(
-        "🤖 <b>Gemini AI Chat faollashtirildi!</b>\n\n"
-        "Menga istalgan savol, mavzu, rasm yoki audio xabar yuborishingiz mumkin. "
-        "Men sizga yordam berishga tayyorman!\n\n"
+        "Istalgan savol berishingiz, suhbatlashishingiz yoki rasm yuborishingiz mumkin. "
+        "Muloqot xotirada saqlanadi.\n\n"
         "• 🔄 Suhbatni tozalash: <code>/clear</code>\n"
-        "• ❌ Chiqish uchun: <code>/exit</code> yoki «❌ AI rejimdan chiqish» tugmasi",
+        "• 🏠 Bosh menyu: quyidagi tugma",
         parse_mode="HTML",
-        reply_markup=get_ai_keyboard()
+        reply_markup=get_section_keyboard()
     )
 
 
-@router.message(F.text == "❌ AI rejimdan chiqish")
-@router.message(Command("exit"))
-@router.message(Command("stop"))
-async def handle_exit_ai(message: Message):
-    """AI chat rejimidan chiqish"""
-    user_id = message.from_user.id
-    if user_id in ai_active_users:
-        ai_active_users.remove(user_id)
-    await message.answer(
-        "✅ <b>AI Chat rejimidan chiqildi.</b> Bosh menyuga qaytdingiz.",
-        parse_mode="HTML",
-        reply_markup=get_main_keyboard()
-    )
-
-
-@router.message(F.text == "🔄 Yangi suhbat (/clear)")
+@router.message(F.text == "🔄 Yangi so'rov")
 @router.message(Command("clear"))
-async def handle_clear_chat(message: Message):
-    """Foydalanuvchi suhbat tarixini tozalash"""
+async def handle_clear_command(message: Message):
     user_id = message.from_user.id
     ai_service.reset_chat(user_id)
     await message.answer(
-        "🧹 <b>Suhbat tarixi tozalandi!</b>\n\nYangi mavzuda savolingizni berishingiz mumkin.",
+        "🧹 <b>Suhbat va so'rovlar tozalandi!</b>\n\nYangi so'rovingizni yuborishingiz mumkin.",
         parse_mode="HTML"
     )
 
+
+@router.message(Command("setkey"))
+async def handle_setkey(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.reply("ℹ️ <b>Foydalanish:</b> <code>/setkey SIZNING_GEMINI_API_KALITINGIZ</code>", parse_mode="HTML")
+        return
+    new_key = parts[1].strip()
+    ai_service.update_api_key(new_key)
+    save_gemini_key_to_env(new_key)
+    await message.reply("✅ <b>Gemini API kaliti saqlandi va faollashtirildi!</b>", parse_mode="HTML")
+
+
+# =====================================================================
+# HUJJATLARNI QABUL QILISH VA TAHLIL (PDF, Word, Excel, TXT)
+# =====================================================================
+
+@router.message(F.document)
+async def handle_document_upload(message: Message):
+    """
+    Foydalanuvchi hujjat (PDF, Word, Excel, TXT va h.k.) yuborganida uni tahlil qilish
+    """
+    user_id = message.from_user.id
+    doc = message.document
+    filename = doc.file_name or "hujjat.pdf"
+    caption = message.caption or ""
+
+    status_msg = await message.reply(f"⏳ <i>'{filename}' hujjati yuklanmoqda va tahlil qilinmoqda...</i>", parse_mode="HTML")
+    await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+    unique_id = uuid.uuid4().hex[:8]
+    ext = Path(filename).suffix.lower()
+    temp_path = DOWNLOADS_DIR / f"upload_{unique_id}{ext}"
+
+    try:
+        file_info = await message.bot.get_file(doc.file_id)
+        await message.bot.download_file(file_info.file_path, destination=str(temp_path))
+
+        # Matnni ajratib olish
+        extracted_text = extract_text_from_file(str(temp_path), filename)
+        if not extracted_text or len(extracted_text) < 10:
+            await status_msg.edit_text("❌ Ushbu hujjatdan matn ajratib olib bo'lmadi yoki fayl bo'sh.", parse_mode="HTML")
+            return
+
+        # AI orqali tahlil qilish
+        analysis = await ai_service.analyze_document(
+            user_id=user_id,
+            doc_text=extracted_text,
+            filename=filename,
+            custom_prompt=caption
+        )
+
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        title = f"{filename} tahlili"
+        res_id = store_result(title=title, content=analysis, user_name=message.from_user.full_name)
+        await send_ai_response(message, analysis, res_id=res_id)
+
+    except Exception as e:
+        logger.exception(f"Hujjat yuklashda xatolik: {e}")
+        await status_msg.edit_text("❌ Hujjatni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except Exception:
+                pass
+
+
+# =====================================================================
+# OVOZLI XABARLAR (VOICE & AUDIO) HANDLERI
+# =====================================================================
 
 @router.message(F.voice)
 @router.message(F.audio)
 async def handle_audio_message(message: Message):
     """
-    Ovozli xabar yoki audio fayl qabul qilinganda format tanlash imkonini berish:
-    - 📝 Matn
-    - 🎙 Ovozli (Audio)
-    - 📄 Word (.docx)
-    - 📑 PDF (.pdf)
-    - ✨ Barchasi birga
+    Ovozli xabar qabul qilinganda format tanlash imkonini berish:
+    - 📝 Matn, 🎙 Ovozli, 📄 Word, 📑 PDF, ✨ Barchasi
     """
     user_id = message.from_user.id
     user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
@@ -382,32 +515,25 @@ async def handle_audio_message(message: Message):
     choice_text = (
         "🎙 <b>Audio xabar qabul qilindi!</b>\n\n"
         "Ushbu audio xabarni tahlil qilib, natijani qaysi formatda olishni xohlaysiz?\n\n"
-        "• 📝 <b>Matn:</b> Chatda yozma javob olish\n"
-        "• 🎙 <b>Ovozli:</b> Audio / ovozli xabar shaklida eshitish\n"
-        "• 📄 <b>Word:</b> Chiroyli tartiblangan <code>.docx</code> fayli\n"
+        "• 📝 <b>Matn:</b> Chatda yozma javob\n"
+        "• 🎙 <b>Ovozli:</b> Audio shaklida eshitish\n"
+        "• 📄 <b>Word:</b> Formatlangan <code>.docx</code> fayli\n"
         "• 📑 <b>PDF:</b> Chop etishga tayyor <code>.pdf</code> hujjati\n"
-        "• ✨ <b>Barchasi birga:</b> Barcha formatlarda birdaniga olish\n\n"
+        "• ✨ <b>Barchasi birga:</b> Barcha formatlarda olish\n\n"
         "👇 <i>Quyidagi tugmalardan birini tanlang:</i>"
     )
 
-    await message.reply(
-        choice_text,
-        parse_mode="HTML",
-        reply_markup=get_audio_choice_keyboard(audio_id)
-    )
+    await message.reply(choice_text, parse_mode="HTML", reply_markup=get_audio_choice_keyboard(audio_id))
 
 
 @router.callback_query(F.data.startswith("aud_mode:"))
 async def handle_audio_mode_callback(callback: CallbackQuery):
-    """
-    Foydalanuvchi audio javob formatini tanlaganda ishga tushuvchi callback
-    """
     parts = callback.data.split(":")
     if len(parts) != 3:
         await callback.answer("Noto'g'ri so'rov!")
         return
 
-    action = parts[1]  # "text", "voice", "docx", "pdf", "all", "cancel"
+    action = parts[1]
     audio_id = parts[2]
 
     if action == "cancel":
@@ -422,35 +548,17 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
     item = pending_audio.get(audio_id)
     if not item:
         await callback.answer("Ushbu so'rov muddati o'tgan. Iltimos, audioni qaytadan yuboring.", show_alert=True)
-        try:
-            await callback.message.edit_text("⚠️ <i>Ushbu audio so'rov muddati o'tgan. Iltimos, audioni qaytadan yuboring.</i>", parse_mode="HTML")
-        except Exception:
-            pass
         return
 
     await callback.answer("Tanlovingiz qabul qilindi!")
-
-    status_msg = await callback.message.edit_text(
-        "⏳ <i>Audio Gemini AI tomonidan tahlil qilinmoqda, iltimos kuting...</i>",
-        parse_mode="HTML"
-    )
+    status_msg = await callback.message.edit_text("⏳ <i>Audio Gemini AI tomonidan tahlil qilinmoqda, iltimos kuting...</i>", parse_mode="HTML")
 
     try:
-        # Telegramdan audio faylni yuklab olish
         file_info = await callback.bot.get_file(item["file_id"])
         audio_bytes_io = io.BytesIO()
         await callback.bot.download_file(file_info.file_path, destination=audio_bytes_io)
         audio_bytes = audio_bytes_io.getvalue()
 
-        # Chat action ko'rsatish
-        if action == "voice":
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.RECORD_VOICE)
-        elif action in ("docx", "pdf"):
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
-        else:
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
-
-        # Gemini AI dan audio tahlili va javob olish
         response = await ai_service.ask_gemini_audio(
             user_id=item["user_id"],
             audio_bytes=audio_bytes,
@@ -459,24 +567,16 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
         )
 
         user_name = item.get("user_name", "Foydalanuvchi")
+        res_id = store_result(title="Audio Tahlil", content=response, user_name=user_name)
 
-        # 1. Matn ko'rinishida javob berish
         if action in ("text", "all"):
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-            await send_ai_response(callback.message, response)
+            await send_ai_response(callback.message, response, res_id=res_id)
 
-        # 2. Word (.docx) ko'rinishida javob berish
         if action in ("docx", "all"):
-            if action == "docx":
-                try:
-                    await status_msg.edit_text("📄 <i>Word hujjati (.docx) shakllantirilmoqda...</i>", parse_mode="HTML")
-                except Exception:
-                    pass
-
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
             docx_path = generate_docx(title="Audio Xabar Tahlili", content=response, user_name=user_name)
             try:
                 await callback.message.answer_document(
@@ -491,21 +591,7 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                     except Exception:
                         pass
 
-            if action == "docx":
-                try:
-                    await status_msg.delete()
-                except Exception:
-                    pass
-
-        # 3. PDF (.pdf) ko'rinishida javob berish
         if action in ("pdf", "all"):
-            if action == "pdf":
-                try:
-                    await status_msg.edit_text("📑 <i>PDF hujjati (.pdf) shakllantirilmoqda...</i>", parse_mode="HTML")
-                except Exception:
-                    pass
-
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
             pdf_path = generate_pdf(title="Audio Xabar Tahlili", content=response, user_name=user_name)
             try:
                 await callback.message.answer_document(
@@ -520,23 +606,8 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                     except Exception:
                         pass
 
-            if action == "pdf":
-                try:
-                    await status_msg.delete()
-                except Exception:
-                    pass
-
-        # 4. Ovozli (Audio) ko'rinishida javob berish
         if action in ("voice", "all"):
-            if action == "voice":
-                try:
-                    await status_msg.edit_text("🎙 <i>Ovozli javob tayyorlanmoqda...</i>", parse_mode="HTML")
-                except Exception:
-                    pass
-
-            await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.RECORD_VOICE)
             ogg_path, mp3_path = await convert_text_to_voice_and_audio(response)
-
             try:
                 try:
                     await callback.message.answer_voice(
@@ -546,18 +617,11 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                     )
                 except TelegramBadRequest as e:
                     if "VOICE_MESSAGES_FORBIDDEN" in str(e):
-                        logger.warning("Foydalanuvchida VOICE_MESSAGES_FORBIDDEN yoqilgan, audio fayl sifatida yuborilmoqda.")
-                        try:
-                            await callback.message.answer_audio(
-                                audio=FSInputFile(mp3_path),
-                                caption="🎙 <b>AI Ovozli Javobi</b>\n<i>(Telegram sozlamalaringizda ovozli xabarlar cheklanganligi sababli audio fayl shaklida yuborildi)</i>",
-                                parse_mode="HTML"
-                            )
-                        except Exception:
-                            await callback.message.answer(
-                                "ℹ️ <i>Telegram maxfiylik sozlamalaringiz sababli ovozli xabar yuborib bo'lmadi. Javob matn sifatida taqdim etilmoqda:</i>"
-                            )
-                            await send_ai_response(callback.message, response)
+                        await callback.message.answer_audio(
+                            audio=FSInputFile(mp3_path),
+                            caption="🎙 <b>AI Ovozli Javobi</b>",
+                            parse_mode="HTML"
+                        )
                     else:
                         raise
             finally:
@@ -568,97 +632,239 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                         except Exception:
                             pass
 
-            if action == "voice":
-                try:
-                    await status_msg.delete()
-                except Exception:
-                    pass
+        if action != "text":
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
 
     except Exception as e:
         logger.exception(f"Audio xabarni tahlil qilishda xatolik: {e}")
         try:
-            await status_msg.edit_text("❌ Audio tahlil qilishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.", parse_mode="HTML")
+            await status_msg.edit_text("❌ Audio tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
         except Exception:
             pass
     finally:
         pending_audio.pop(audio_id, None)
 
 
-@router.message(F.photo)
-async def handle_photo_message(message: Message):
-    """
-    Rasm qabul qilinganda uni AI ga yuborish
-    """
-    user_id = message.from_user.id
-    caption = message.caption or ""
+# =====================================================================
+# INTERAKTIV BO'LIMGA O'TKAZISH VA TAHRIRLASH CALLBACKLARI
+# =====================================================================
 
-    if user_id in ai_active_users or caption.startswith("/ai"):
-        prompt = caption.replace("/ai", "").strip()
-        status_msg = await message.reply("🤔 <i>Rasm tahlil qilinmoqda, iltimos kuting...</i>", parse_mode="HTML")
-        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+@router.callback_query(F.data.startswith("act:"))
+async def handle_content_action_callback(callback: CallbackQuery):
+    """
+    Natija tagidagi «📂 Bo'limga o'tkazish» va «✏️ Tahrirlash» tugmalari
+    """
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Xatolik!")
+        return
 
+    sub_act = parts[1]
+    res_id = parts[2]
+
+    if res_id not in result_store:
+        await callback.answer("Ma'lumot xotirada eskirgan.", show_alert=True)
+        return
+
+    if sub_act == "tr":
+        await callback.message.edit_reply_markup(reply_markup=get_transfer_keyboard(res_id))
+        await callback.answer("Bo'limni tanlang:")
+    elif sub_act == "ed":
+        await callback.message.edit_reply_markup(reply_markup=get_edit_keyboard(res_id))
+        await callback.answer("Tahrirlash turini tanlang:")
+    elif sub_act == "back":
+        await callback.message.edit_reply_markup(reply_markup=get_content_actions_keyboard(res_id))
+        await callback.answer("Asosiy holatga qaytdi.")
+
+
+@router.callback_query(F.data.startswith("tr:"))
+async def handle_transfer_execution(callback: CallbackQuery):
+    """
+    Natijani tanlangan bo'lim formatiga o'tkazish (Word, PDF, Excel, PPTX, Deep, Voice)
+    """
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Xatolik!")
+        return
+
+    target = parts[1]
+    res_id = parts[2]
+
+    item = result_store.get(res_id)
+    if not item:
+        await callback.answer("Ushbu ma'lumot xotirada topilmadi.", show_alert=True)
+        return
+
+    content = item["content"]
+    title = item["title"]
+    user_name = item.get("user_name", "Foydalanuvchi")
+
+    await callback.answer(f"O'tkazilmoqda...")
+
+    if target == "docx":
+        docx_path = generate_docx(title=title, content=content, user_name=user_name)
         try:
-            photo = message.photo[-1]
-            file_info = await message.bot.get_file(photo.file_id)
-            photo_bytes_io = io.BytesIO()
-            await message.bot.download_file(file_info.file_path, destination=photo_bytes_io)
-            photo_bytes = photo_bytes_io.getvalue()
-
-            response = await ai_service.ask_gemini(
-                user_id=user_id,
-                prompt=prompt,
-                image_bytes=photo_bytes,
-                mime_type="image/jpeg"
+            await callback.message.answer_document(
+                document=FSInputFile(docx_path, filename=f"{title[:20]}.docx"),
+                caption=f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
             )
-            try:
-                await status_msg.delete()
-            except Exception:
-                pass
-            await send_ai_response(message, response)
-        except Exception as e:
-            logger.exception(f"Rasmni tahlil qilishda xatolik: {e}")
-            await status_msg.edit_text("❌ Rasmni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
-    else:
-        await message.reply(
-            "ℹ️ <b>Rasm qabul qilindi.</b>\n\n"
-            "Ushbu rasm bo'yicha sun'iy intellektdan tahlil yoki javob olish uchun <b>«🤖 AI Chat»</b> rejimiga o'ting yoki rasm izohiga <code>/ai savolingiz</code> deb yozing.",
-            parse_mode="HTML",
-            reply_markup=get_ai_inline_button()
-        )
+        finally:
+            if docx_path and os.path.exists(docx_path):
+                os.remove(docx_path)
 
+    elif target == "pdf":
+        pdf_path = generate_pdf(title=title, content=content, user_name=user_name)
+        try:
+            await callback.message.answer_document(
+                document=FSInputFile(pdf_path, filename=f"{title[:20]}.pdf"),
+                caption=f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
+            )
+        finally:
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
+    elif target == "pptx":
+        status_msg = await callback.message.reply("📽 <i>Prezentatsiya slaydlari shakllantirilmoqda...</i>", parse_mode="HTML")
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+        slides_text = await ai_service.format_for_presentation(callback.from_user.id, content)
+        pptx_path = generate_presentation(title=title, content=slides_text, user_name=user_name)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        try:
+            await callback.message.answer_document(
+                document=FSInputFile(pptx_path, filename=f"{title[:20]}.pptx"),
+                caption=f"📽 <b>PowerPoint taqdimoti yaratildi!</b>\n<i>Mavzu: {title}</i>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
+            )
+        finally:
+            if pptx_path and os.path.exists(pptx_path):
+                os.remove(pptx_path)
+
+    elif target == "xlsx":
+        status_msg = await callback.message.reply("📊 <i>Excel jadvali shakllantirilmoqda...</i>", parse_mode="HTML")
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+        table_text = await ai_service.format_for_excel(callback.from_user.id, content)
+        xlsx_path = generate_excel(title=title, content=table_text, user_name=user_name)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        try:
+            await callback.message.answer_document(
+                document=FSInputFile(xlsx_path, filename=f"{title[:20]}.xlsx"),
+                caption=f"📊 <b>Excel jadvali yaratildi!</b>\n<i>Mavzu: {title}</i>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
+            )
+        finally:
+            if xlsx_path and os.path.exists(xlsx_path):
+                os.remove(xlsx_path)
+
+    elif target == "deep":
+        status_msg = await callback.message.reply("🔬 <i>Ushbu mavzu bo'yicha Deep Research o'tkazilmoqda...</i>", parse_mode="HTML")
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+        deep_res = await ai_service.deep_research(callback.from_user.id, f"{title}\n{content[:500]}")
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        new_res_id = store_result(title=f"Deep Research: {title}", content=deep_res, user_name=user_name)
+        await send_ai_response(callback.message, deep_res, res_id=new_res_id)
+
+    elif target == "voice":
+        status_msg = await callback.message.reply("🎙 <i>Ovozli xabar tayyorlanmoqda...</i>", parse_mode="HTML")
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.RECORD_VOICE)
+        ogg_path, mp3_path = await convert_text_to_voice_and_audio(content)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        try:
+            try:
+                await callback.message.answer_voice(voice=FSInputFile(ogg_path), caption=f"🎙 <b>Ovozli javob: {title}</b>", parse_mode="HTML")
+            except TelegramBadRequest:
+                await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption=f"🎙 <b>Audio fayl: {title}</b>", parse_mode="HTML")
+        finally:
+            for p in (ogg_path, mp3_path):
+                if p and os.path.exists(p):
+                    os.remove(p)
+
+
+@router.callback_query(F.data.startswith("ed:"))
+async def handle_edit_execution(callback: CallbackQuery):
+    """
+    Natijani tahrirlash (kengaytirish, qisqartirish, qayta yozish, tarjima)
+    """
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Xatolik!")
+        return
+
+    edit_type = parts[1]
+    res_id = parts[2]
+
+    item = result_store.get(res_id)
+    if not item:
+        await callback.answer("Ma'lumot topilmadi.", show_alert=True)
+        return
+
+    content = item["content"]
+    title = item["title"]
+    user_name = item.get("user_name", "Foydalanuvchi")
+
+    instructions = {
+        "expand": "Ushbu tahlilni yanada kengaytirib, ko'proq tafsilotlar, misollar va tushuntirishlar bilan boyiting.",
+        "summary": "Ushbu tahlilni eng muhim xulosalarga qisqartiring, punktlar bilan lo'nda qilib bering.",
+        "rewrite": "Ushbu tahlilni yanada professional, ravon va ta'sirchan uslubda qayta shakllantiring.",
+        "truz": "Ushbu matnni toza, ravon va adabiy o'zbek tiliga o'giring."
+    }
+
+    instruction = instructions.get(edit_type, "Matnni qayta ishlang.")
+    await callback.answer("Tahrirlanmoqda...")
+    status_msg = await callback.message.reply("✏️ <i>Tahrirlanmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+
+    new_content = await ai_service.refine_content(callback.from_user.id, content, instruction)
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    new_res_id = store_result(title=f"{title} (Tahrirlangan)", content=new_content, user_name=user_name)
+    await send_ai_response(callback.message, new_content, res_id=new_res_id)
+
+
+# =====================================================================
+# VIDEO VA RASM HANDLERLARI
+# =====================================================================
 
 @router.message(F.video)
 async def handle_video_message(message: Message):
-    """
-    Foydalanuvchi to'g'ridan-to'g'ri to'rtburchak video yuborganda,
-    uni Telegram dumaloq (video note) formatiga aylantirish
-    """
+    """Video qabul qilinganda dumaloq qilish yoki MP3 audio ajratish taklifi"""
     status_msg = await message.reply("⏳ <i>Video qabul qilindi. Dumaloq (Video Note) formatiga aylantirilmoqda...</i>", parse_mode="HTML")
-
     input_path = None
     circle_path = None
 
     try:
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.RECORD_VIDEO_NOTE)
-
         unique_id = uuid.uuid4().hex[:8]
         input_path = str(DOWNLOADS_DIR / f"raw_{unique_id}.mp4")
 
-        # Telegramdan videoni yuklab olish
         file_info = await message.bot.get_file(message.video.file_id)
         await message.bot.download_file(file_info.file_path, destination=input_path)
 
-        # Dumaloq formatga o'tkazish
-        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_VIDEO_NOTE)
         circle_path, duration = await convert_to_video_note(input_path, max_duration=60)
-
-        # Dumaloq video (krujok) qilib jo'natish
-        await message.answer_video_note(
-            video_note=FSInputFile(circle_path),
-            length=384,
-            duration=duration
-        )
-
+        await message.answer_video_note(video_note=FSInputFile(circle_path), length=384, duration=duration)
         try:
             await status_msg.delete()
         except Exception:
@@ -666,26 +872,17 @@ async def handle_video_message(message: Message):
 
     except TelegramBadRequest as e:
         if "VOICE_MESSAGES_FORBIDDEN" in str(e):
-            logger.warning("Foydalanuvchida ovozli/dumaloq xabarlar maxfiyligi yoqilgan, doiraviy video sifatida yuborilmoqda.")
             if circle_path and os.path.exists(circle_path):
-                await message.answer_video(
-                    video=FSInputFile(circle_path),
-                    caption="🔘 <b>Dumaloq video tayyor!</b>",
-                    parse_mode="HTML"
-                )
+                await message.answer_video(video=FSInputFile(circle_path), caption="🔘 <b>Dumaloq video tayyor!</b>", parse_mode="HTML")
                 try:
                     await status_msg.delete()
                 except Exception:
                     pass
         else:
-            logger.exception(f"TelegramBadRequest: {e}")
             await status_msg.edit_text("❌ Telegram xatoligi yuz berdi.", parse_mode="HTML")
     except Exception as e:
         logger.exception(f"Videoni dumaloq qilishda xatolik: {e}")
-        await status_msg.edit_text(
-            "❌ Videoni dumaloq formatga aylantirishda xatolik yuz berdi. Iltimos, video formatini tekshirib qayta urinib ko'ring.",
-            parse_mode="HTML"
-        )
+        await status_msg.edit_text("❌ Videoni aylantirishda xatolik yuz berdi.", parse_mode="HTML")
     finally:
         for path in (input_path, circle_path):
             if path and os.path.exists(path):
@@ -695,91 +892,220 @@ async def handle_video_message(message: Message):
                     pass
 
 
-@router.callback_query(F.data == "make_circle")
-async def handle_make_circle_callback(callback: CallbackQuery):
-    """
-    Yuklangan video ostidagi «🔘 Dumaloq video qilish» tugmasi bosilganda
-    """
-    msg = callback.message
-    if not msg or not msg.video:
-        await callback.answer("Video topilmadi!", show_alert=True)
+@router.callback_query(F.data.startswith("vid:"))
+async def handle_video_callback(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    action = parts[1]
+    v_id = parts[2]
+    item = pending_audio.get(f"vid_{v_id}")
+
+    if not item or "path" not in item:
+        await callback.answer("Video eskirgan.", show_alert=True)
         return
 
-    await callback.answer("Dumaloq video tayyorlanmoqda...")
-    status_msg = await msg.reply("⏳ <i>Video dumaloq formatga aylantirilmoqda...</i>", parse_mode="HTML")
+    video_path = item["path"]
+    if action == "audio":
+        await callback.answer("Audio ajratilmoqda...")
+        status_msg = await callback.message.reply("🎵 <i>Audioni MP3 formatida ajratib olinmoqda...</i>", parse_mode="HTML")
+        try:
+            mp3_path = await extract_audio_from_video(video_path)
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption="🎵 <b>Videodan ajratilgan MP3 audio</b>", parse_mode="HTML")
+            if os.path.exists(mp3_path):
+                os.remove(mp3_path)
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Audio ajratishda xatolik: {e}", parse_mode="HTML")
 
-    input_path = None
-    circle_path = None
+    elif action == "circle":
+        await callback.answer("Dumaloq video tayyorlanmoqda...")
+        status_msg = await callback.message.reply("⏳ <i>Dumaloq formatga o'tkazilmoqda...</i>", parse_mode="HTML")
+        try:
+            circle_path, duration = await convert_to_video_note(video_path, max_duration=60)
+            await callback.message.answer_video_note(video_note=FSInputFile(circle_path), length=384, duration=duration)
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            if os.path.exists(circle_path):
+                os.remove(circle_path)
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Dumaloq qilishda xatolik: {e}", parse_mode="HTML")
+
+
+@router.message(F.photo)
+async def handle_photo_message(message: Message):
+    """Rasm qabul qilinganda uni AI ga yuborish"""
+    user_id = message.from_user.id
+    caption = message.caption or ""
+
+    status_msg = await message.reply("🤔 <i>Rasm tahlil qilinmoqda...</i>", parse_mode="HTML")
+    await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     try:
-        await callback.bot.send_chat_action(chat_id=msg.chat.id, action=ChatAction.RECORD_VIDEO_NOTE)
+        photo = message.photo[-1]
+        file_info = await message.bot.get_file(photo.file_id)
+        photo_bytes_io = io.BytesIO()
+        await message.bot.download_file(file_info.file_path, destination=photo_bytes_io)
+        photo_bytes = photo_bytes_io.getvalue()
 
-        unique_id = uuid.uuid4().hex[:8]
-        input_path = str(DOWNLOADS_DIR / f"cb_raw_{unique_id}.mp4")
-
-        # Telegramdan videoni yuklab olish
-        file_info = await callback.bot.get_file(msg.video.file_id)
-        await callback.bot.download_file(file_info.file_path, destination=input_path)
-
-        # Dumaloq formatga o'tkazish
-        await callback.bot.send_chat_action(chat_id=msg.chat.id, action=ChatAction.UPLOAD_VIDEO_NOTE)
-        circle_path, duration = await convert_to_video_note(input_path, max_duration=60)
-
-        # Dumaloq video qilib jo'natish
-        await msg.answer_video_note(
-            video_note=FSInputFile(circle_path),
-            length=384,
-            duration=duration
+        response = await ai_service.ask_gemini(
+            user_id=user_id,
+            prompt=caption or "Ushbu rasmni chuqur tahlil qiling va nimalar aks etganini yozing.",
+            image_bytes=photo_bytes,
+            mime_type="image/jpeg"
         )
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        res_id = store_result(title="Rasm tahlili", content=response, user_name=message.from_user.full_name)
+        await send_ai_response(message, response, res_id=res_id)
+
+    except Exception as e:
+        logger.exception(f"Rasmni tahlil qilishda xatolik: {e}")
+        await status_msg.edit_text("❌ Rasmni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
+
+
+# =====================================================================
+# MATNLI XABARLAR (BO'LIMLAR BO'YICHA YO'NALTIRISH)
+# =====================================================================
+
+@router.message(F.text)
+async def handle_text_message(message: Message):
+    user_id = message.from_user.id
+    text = message.text or ""
+    current_mode = user_active_mode.get(user_id, "NORMAL")
+    user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
+
+    # 1. Instagram havolasi bo'lsa
+    match = INSTAGRAM_URL_REGEX.search(text)
+    if match:
+        await process_instagram_download(message, match.group(0))
+        return
+
+    # 2. Rejim: DEEP_RESEARCH
+    if current_mode == "DEEP_RESEARCH":
+        status_msg = await message.reply("🔬 <i>Mavzu bo'yicha chuqur izlanish (Deep Research) olib borilmoqda, iltimos kuting...</i>", parse_mode="HTML")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+        report = await ai_service.deep_research(user_id=user_id, query=text)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        res_id = store_result(title=text[:35], content=report, user_name=user_name)
+        await send_ai_response(message, report, res_id=res_id)
+        return
+
+    # 3. Rejim: SLIDES (Prezentatsiya)
+    if current_mode == "SLIDES":
+        status_msg = await message.reply("📽 <i>Taqdimot slaydlari rejalashtirilmoqda va PowerPoint (.pptx) fayli yaratilmoqda...</i>", parse_mode="HTML")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+
+        slides_text = await ai_service.format_for_presentation(user_id=user_id, text=text)
+        pptx_path = generate_presentation(title=text[:40], content=slides_text, user_name=user_name)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        res_id = store_result(title=f"Prezentatsiya: {text[:30]}", content=slides_text, user_name=user_name)
+        try:
+            await message.answer_document(
+                document=FSInputFile(pptx_path, filename=f"Prezentatsiya_{res_id}.pptx"),
+                caption=f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {text[:45]}</i>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
+            )
+        finally:
+            if pptx_path and os.path.exists(pptx_path):
+                os.remove(pptx_path)
+        return
+
+    # 4. Rejim: OFFICE_DOCS (Word, PDF, Excel)
+    if current_mode == "OFFICE_DOCS":
+        status_msg = await message.reply("📊 <i>Ma'lumotlar qayta ishlanmoqda va hujjatlar tayyorlanmoqda...</i>", parse_mode="HTML")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+
+        docx_path = generate_docx(title=text[:35], content=text, user_name=user_name)
+        pdf_path = generate_pdf(title=text[:35], content=text, user_name=user_name)
+        table_text = await ai_service.format_for_excel(user_id, text)
+        xlsx_path = generate_excel(title=text[:35], content=table_text, user_name=user_name)
 
         try:
             await status_msg.delete()
         except Exception:
             pass
 
-    except TelegramBadRequest as e:
-        if "VOICE_MESSAGES_FORBIDDEN" in str(e):
-            logger.warning("Foydalanuvchida ovozli/dumaloq xabarlar maxfiyligi yoqilgan, doiraviy video sifatida yuborilmoqda.")
-            if circle_path and os.path.exists(circle_path):
-                await msg.answer_video(
-                    video=FSInputFile(circle_path),
-                    caption="🔘 <b>Dumaloq video tayyor!</b>",
-                    parse_mode="HTML"
-                )
-                try:
-                    await status_msg.delete()
-                except Exception:
-                    pass
-        else:
-            logger.exception(f"TelegramBadRequest: {e}")
-            await status_msg.edit_text("❌ Telegram xatoligi yuz berdi.", parse_mode="HTML")
-    except Exception as e:
-        logger.exception(f"Callback dumaloq video xatoligi: {e}")
-        await status_msg.edit_text(
-            "❌ Videoni dumaloq formatga o'tkazib bo'lmadi.",
-            parse_mode="HTML"
-        )
-    finally:
-        for path in (input_path, circle_path):
-            if path and os.path.exists(path):
-                try:
-                    os.remove(path)
-                except Exception:
-                    pass
+        res_id = store_result(title=text[:30], content=text, user_name=user_name)
+        try:
+            await message.answer_document(
+                document=FSInputFile(docx_path, filename=f"Hujjat_{res_id}.docx"),
+                caption="📄 <b>Word formati (.docx)</b>",
+                parse_mode="HTML"
+            )
+            await message.answer_document(
+                document=FSInputFile(pdf_path, filename=f"Hujjat_{res_id}.pdf"),
+                caption="📑 <b>PDF formati (.pdf)</b>",
+                parse_mode="HTML"
+            )
+            await message.answer_document(
+                document=FSInputFile(xlsx_path, filename=f"Jadval_{res_id}.xlsx"),
+                caption="📊 <b>Excel jadvali (.xlsx)</b>",
+                parse_mode="HTML",
+                reply_markup=get_content_actions_keyboard(res_id)
+            )
+        finally:
+            for p in (docx_path, pdf_path, xlsx_path):
+                if p and os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+        return
+
+    # 5. Rejim: DOC_ANALYSIS (Matn shaklida tahlil so'ralsa)
+    if current_mode == "DOC_ANALYSIS":
+        status_msg = await message.reply("📑 <i>Hujjat matni tahlil qilinmoqda...</i>", parse_mode="HTML")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+        analysis = await ai_service.analyze_document(user_id=user_id, doc_text=text, filename="Matnli Hujjat")
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name)
+        await send_ai_response(message, analysis, res_id=res_id)
+        return
+
+    # 6. Rejim: AI_CHAT yoki oddiy suhbat
+    status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
+    await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+    response = await ai_service.ask_gemini(user_id=user_id, prompt=text)
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    res_id = store_result(title=text[:30], content=response, user_name=user_name)
+    await send_ai_response(message, response, res_id=res_id)
 
 
 async def process_instagram_download(message: Message, url: str):
-    """Instagram havolasini yuklash jarayoni"""
-    status_msg = await message.reply("⏳ <i>Video yuklab olinmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    """Instagram videosini yuklash jarayoni"""
+    status_msg = await message.reply("⏳ <i>Instagram video yuklab olinmoqda, iltimos kuting...</i>", parse_mode="HTML")
     file_path = None
     try:
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_VIDEO)
-
-        # Videoni yuklab olish
         video_data = await download_instagram_video(url)
         file_path = video_data['file_path']
-
-        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_VIDEO)
 
         bot_info = await message.bot.get_me()
         caption = (
@@ -787,7 +1113,6 @@ async def process_instagram_download(message: Message, url: str):
             f"🤖 <i>@{bot_info.username} orqali yuklandi</i>"
         )
 
-        # Videoni foydalanuvchiga jo'natish
         video_file = FSInputFile(file_path)
         await message.answer_video(
             video=video_file,
@@ -797,7 +1122,7 @@ async def process_instagram_download(message: Message, url: str):
             width=video_data.get('width'),
             height=video_data.get('height'),
             supports_streaming=True,
-            reply_markup=get_circle_button()
+            reply_markup=get_video_options_keyboard(file_path)
         )
 
         try:
@@ -806,80 +1131,14 @@ async def process_instagram_download(message: Message, url: str):
             pass
 
     except FileTooLargeError as e:
-        await status_msg.edit_text(
-            f"❌ <b>Hajm bo'yicho cheklov:</b>\n{str(e)}",
-            parse_mode="HTML"
-        )
+        await status_msg.edit_text(f"❌ <b>Hajm bo'yicha cheklov:</b>\n{str(e)}", parse_mode="HTML")
     except PrivateMediaError as e:
-        await status_msg.edit_text(
-            f"🔒 <b>Yopiq hisob:</b>\n{str(e)}",
-            parse_mode="HTML"
-        )
+        await status_msg.edit_text(f"🔒 <b>Yopiq hisob:</b>\n{str(e)}", parse_mode="HTML")
     except DownloadException as e:
-        logger.error(f"Yuklab olishda xatolik: {e}")
-        await status_msg.edit_text(
-            "❌ <b>Xatolik yuz berdi:</b>\nVideoni yuklab bo'lmadi. Havola to'g'riligini va post o'chirilmaganligini tekshiring.",
-            parse_mode="HTML"
-        )
+        await status_msg.edit_text("❌ <b>Xatolik yuz berdi:</b>\nVideoni yuklab bo'lmadi.", parse_mode="HTML")
     except Exception as e:
         logger.exception(f"Kutilmagan xatolik: {e}")
-        await status_msg.edit_text(
-            "❌ Kutilmagan texnik xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.",
-            parse_mode="HTML"
-        )
+        await status_msg.edit_text("❌ Texnik xatolik yuz berdi.", parse_mode="HTML")
     finally:
-        if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                logger.error(f"Vaqtinchalik faylni o'chirishda xatolik: {e}")
-
-
-@router.message(F.text)
-async def handle_text_message(message: Message):
-    """
-    Umumiy matnli xabarlarni qayta ishlash:
-    - Agar Instagram havolasi bo'lsa -> yuklab beradi
-    - Agar foydalanuvchi AI rejimida bo'lsa -> Gemini AI ga yuboradi
-    - Aks holda -> yordam va menyu taklif qiladi
-    """
-    user_id = message.from_user.id
-    text = message.text or ""
-
-    # 1. Instagram havolasi bormi tekshiramiz
-    match = INSTAGRAM_URL_REGEX.search(text)
-    if match:
-        await process_instagram_download(message, match.group(0))
-        return
-
-    # 2. Agar foydalanuvchi AI rejimida bo'lsa
-    if user_id in ai_active_users:
-        status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
-        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
-
-        response = await ai_service.ask_gemini(user_id=user_id, prompt=text)
-        try:
-            await status_msg.delete()
-        except Exception:
-            pass
-        await send_ai_response(message, response)
-        return
-
-    # 3. Agar AI rejimida bo'lmasa va Instagram havolasi bo'lmasa
-    if "instagram.com" in text.lower():
-        await message.reply(
-            "❌ Havola noto'g'ri ko'rinmoqda. Iltimos, video yoki Reels havolasini to'g'ri formatda yuboring.\n"
-            "Misol: <code>https://www.instagram.com/reel/Cxxxxxx/</code>",
-            parse_mode="HTML"
-        )
-    else:
-        await message.reply(
-            "ℹ️ <b>Nima qilishni xohlaysiz?</b>\n\n"
-            "• 🤖 <b>Sun'iy intellekt bilan suhbatlashish</b> uchun <b>«🤖 AI Chat»</b> tugmasini bosing yoki <code>/ai savolingiz</code> deb yozing.\n"
-            "• 🎙 <b>Audio xabar yuboring</b> va matn yoki ovozli shaklda tahlil oling.\n"
-            "• 📥 <b>Instagram video yuklash</b> uchun havolani yuboring.\n"
-            "• 🔘 <b>Dumaloq video</b> tayyorlash uchun video jo'nating.\n\n"
-            "Batafsil ma'lumot uchun: /help",
-            parse_mode="HTML",
-            reply_markup=get_ai_inline_button()
-        )
+        # Faylni darhol o'chirmaymiz, foydalanuvchi "audio ajratish" tugmasini bosishi mumkin (yoki 10 daqiqadan keyin tozalanadi)
+        pass

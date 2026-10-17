@@ -17,6 +17,18 @@ SYSTEM_PROMPT = (
     "Agar savol berilsa, to'liq va konstruktiv yordam bering."
 )
 
+DEEP_RESEARCH_PROMPT = (
+    "Siz xalqaro darajadagi bosh ilmiy va tahliliy izlanuvchisiz (Chief Research Analyst). "
+    "Mavzu yoki savol bo'yicha eng yuqori darajada chuqur, mukammal, faktlarga asoslangan va tizimli hisobot tayyorlang.\n"
+    "Hisobot tuzilishi:\n"
+    "1. 📌 Kirish va Mavzuning Dolzarbligi\n"
+    "2. 🔍 Chuqur Tahlil va Asosiy Mexanizmlar\n"
+    "3. 📊 Asosiy Ko'rsatkichlar, Faktlar va Statistika\n"
+    "4. ⚠️ Xatarlar, Muammolar va To'siqlar\n"
+    "5. 💡 Strategik Yechimlar, Amaliy Qadamlar va Xulosa\n\n"
+    "Javobni professional, tushunarli va chiroyli sarlavhalar (#, ##), punktlar bilan bayon qiling."
+)
+
 class AIService:
     def __init__(self):
         self._client: Optional[genai.Client] = None
@@ -93,7 +105,6 @@ class AIService:
 
         try:
             if image_bytes:
-                # Agar rasm bo'lsa
                 image_part = types.Part.from_bytes(
                     data=image_bytes,
                     mime_type=mime_type
@@ -168,6 +179,159 @@ class AIService:
 
             return f"❌ <b>Audio tahlilida xatolik:</b>\n{err_msg[:200]}"
 
+    async def deep_research(self, user_id: int, query: str) -> str:
+        """
+        Mavzu bo'yicha chuqur tahlil (Deep Research) o'tkazish
+        """
+        if not self.is_configured():
+            return "⚠️ Gemini API kaliti kiritilmagan!"
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return "❌ AI mijozi bilan bog'lanishda xatolik."
+
+        try:
+            cfg = types.GenerateContentConfig(
+                system_instruction=DEEP_RESEARCH_PROMPT,
+                temperature=0.4
+            )
+            prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt,
+                config=cfg
+            )
+            if response and response.text:
+                return response.text
+            return "Tadqiqot natijasi olinmadi."
+        except Exception as e:
+            logger.exception(f"Deep Research xatoligi: {e}")
+            return f"❌ <b>Deep Research xatoligi:</b> {e}"
+
+    async def analyze_document(self, user_id: int, doc_text: str, filename: str, custom_prompt: Optional[str] = None) -> str:
+        """
+        Hujjat (PDF, Word, Excel, TXT) matnini tahlil qilish
+        """
+        if not self.is_configured():
+            return "⚠️ Gemini API kaliti kiritilmagan!"
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return "❌ AI mijozi bilan bog'lanishda xatolik."
+
+        doc_instruction = (
+            f"Foydalanuvchi '{filename}' nomli hujjatni tahlil qilish uchun yubordi.\n"
+            "Ushbu hujjat matnini tahlil qiling:\n"
+            "1. 📄 Hujjatning asosiy maqsadi va qisqacha mazmuni\n"
+            "2. 🔑 Eng muhim shartlar, qoidalar va bandlar\n"
+            "3. 🔢 Sanalar, raqamlar, tomonlar yoki moliyaviy ma'lumotlar\n"
+            "4. 💡 Xulosa, foydalanuvchi e'tibor berishi shart bo'lgan muhim nuqtalar\n\n"
+        )
+        if custom_prompt:
+            doc_instruction += f"Foydalanuvchining qo'shimcha savoli: {custom_prompt}\n\n"
+
+        prompt = f"{doc_instruction}\n--- HUJJAT MATNI ---\n{doc_text[:35000]}"
+
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text
+            return "Hujjat bo'yicha tahlil natijasi olinmadi."
+        except Exception as e:
+            logger.exception(f"Hujjat tahlili xatoligi: {e}")
+            return f"❌ <b>Hujjat tahlilida xatolik:</b> {e}"
+
+    async def refine_content(self, user_id: int, original_text: str, instruction: str) -> str:
+        """
+        Mavjud tahlil yoki matnni tahrirlash (kengaytirish, qisqartirish, formatlash)
+        """
+        if not self.is_configured():
+            return "⚠️ Gemini API kaliti kiritilmagan!"
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return "❌ AI mijozi bilan bog'lanishda xatolik."
+
+        prompt = (
+            f"Siz professional matn muharririsiz.\n"
+            f"Quyidagi matnga ushbu topshiriqni bajaring: '{instruction}'.\n\n"
+            f"--- ASL MATN ---\n{original_text}\n\n"
+            f"Faqat yangilangan, to'liq va sayqallangan natijani bering."
+        )
+
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text
+            return "Tahrirlash natijasi olinmadi."
+        except Exception as e:
+            logger.exception(f"Matnni tahrirlashda xatolik: {e}")
+            return f"❌ <b>Tahrirlashda xatolik:</b> {e}"
+
+    async def format_for_presentation(self, user_id: int, text: str) -> str:
+        """
+        Matnni PowerPoint slaydlariga mos struktura (# Slayd N:) ga aylantirish
+        """
+        if not self.is_configured():
+            return text
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return text
+
+        prompt = (
+            "Ushbu matn asosida PowerPoint taqdimoti uchun 5-7 ta slayd ssenariysini tuzing.\n"
+            "Har bir slaydni '## Slayd N: Sarlavha' shaklida boshlang va tagidan 3-4 ta muhim punkt ('* Punkt') yozing.\n\n"
+            f"--- MATN ---\n{text[:10000]}"
+        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text
+            return text
+        except Exception:
+            return text
+
+    async def format_for_excel(self, user_id: int, text: str) -> str:
+        """
+        Matndagi ma'lumotlarni Excel jadvaliga mos Markdown table (| col1 | col2 | col3 |) ga aylantirish
+        """
+        if not self.is_configured():
+            return text
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return text
+
+        prompt = (
+            "Ushbu ma'lumotlarni tartibli jadvalga aylantiring.\n"
+            "Jadvalni Markdown formatida tuzing (| № | Bo'lim / Parametr | Tavsif / Ma'lumot | Izoh |):\n\n"
+            f"--- MATN ---\n{text[:10000]}"
+        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text
+            return text
+        except Exception:
+            return text
+
 
 ai_service = AIService()
-
