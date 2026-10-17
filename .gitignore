@@ -1,0 +1,30 @@
+# Maxfiy ma'lumotlar va kalitlar (.env hech qachon GitHubga yuklanmasligi shart)
+.env
+
+# Python kesh fayllari
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Vaqtinchalik yuklab olingan audio va video fayllar
+downloads/
+*.mp4
+*.mp3
+*.ogg
+*.wav
+*.docx
+*.pdf
+
+# Virtual muhit (venv)
+.venv/
+venv/
+ENV/
+env/
+
+# IDE sozlamalari
+.vscode/
+.idea/
+
+# Log fayllari
+*.log
