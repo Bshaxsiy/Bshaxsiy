@@ -7,8 +7,9 @@ __pycache__/
 *$py.class
 *.pyc
 
-# Vaqtinchalik yuklab olingan audio va video fayllar
+# Vaqtinchalik yuklab olingan audio va video fayllar hamda lokal ma'lumotlar
 downloads/
+data/
 *.mp4
 *.mp3
 *.ogg

@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN
 from handlers import router
+from guard_middleware import GuardMiddleware
 
 # Logging sozlamalari
 logging.basicConfig(
@@ -32,6 +33,10 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher()
+
+    # Qo'riqchi (Access Guard) middleware-ni ro'yxatdan o'tkazish
+    dp.message.outer_middleware(GuardMiddleware())
+    dp.callback_query.outer_middleware(GuardMiddleware())
 
     # Routerlarni ulash
     dp.include_router(router)

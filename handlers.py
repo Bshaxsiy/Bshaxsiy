@@ -40,6 +40,7 @@ from document_service import (
     generate_excel,
     extract_text_from_file,
 )
+from access_guard import access_guard
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -76,29 +77,33 @@ def store_result(title: str, content: str, user_name: str = "") -> str:
     return res_id
 
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
-    """Asosiy bo'limlar menyusi"""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="📑 Hujjatlar tahlili"),
-                KeyboardButton(text="🔬 Deep Research")
-            ],
-            [
-                KeyboardButton(text="🎬 Musiqa va Video"),
-                KeyboardButton(text="📽 Slaydlar, Prezentatsiya")
-            ],
-            [
-                KeyboardButton(text="📊 PDF, WORD, EXCEL"),
-                KeyboardButton(text="🤖 AI Chat")
-            ],
-            [
-                KeyboardButton(text="ℹ️ Yordam"),
-                KeyboardButton(text="🏠 Bosh menyu")
-            ]
+def get_main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
+    """Asosiy bo'limlar menyusi (Adminlar uchun Qo'riqchi tugmasi bilan)"""
+    keyboard = [
+        [
+            KeyboardButton(text="📑 Hujjatlar tahlili"),
+            KeyboardButton(text="🔬 Deep Research")
         ],
-        resize_keyboard=True
-    )
+        [
+            KeyboardButton(text="🎬 Musiqa va Video"),
+            KeyboardButton(text="📽 Slaydlar, Prezentatsiya")
+        ],
+        [
+            KeyboardButton(text="📊 PDF, WORD, EXCEL"),
+            KeyboardButton(text="🤖 AI Chat")
+        ]
+    ]
+    if is_admin:
+        keyboard.append([
+            KeyboardButton(text="🛡 Qo'riqchi (Admin)"),
+            KeyboardButton(text="ℹ️ Yordam")
+        ])
+    else:
+        keyboard.append([
+            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="🏠 Bosh menyu")
+        ])
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 
 def get_section_keyboard() -> ReplyKeyboardMarkup:
@@ -254,8 +259,11 @@ async def handle_start(message: Message):
     user_active_mode[user_id] = "NORMAL"
     user_name = message.from_user.first_name if message.from_user else "Foydalanuvchi"
 
+    is_admin = access_guard.is_admin(user_id)
+    admin_badge = "\n👑 <b>Siz bot administratorsiz (Qo'riqchi faol).</b>\n" if is_admin else ""
+
     welcome_text = (
-        f"👋 Assalomu alaykum, <b>{user_name}</b>!\n\n"
+        f"👋 Assalomu alaykum, <b>{user_name}</b>!{admin_badge}\n\n"
         "🌟 <b>Ko'p funksiyali Intellektual Bot</b>ga xush kelibsiz!\n\n"
         "<b>Botning asosiy bo'limlari:</b>\n"
         "1. 📑 <b>Hujjatlar tahlili:</b> PDF, Word, Excel, TXT fayllarni chuqur o'rganish va hisobot olish.\n"
@@ -267,7 +275,7 @@ async def handle_start(message: Message):
         "💡 <i>Har qanday tahlil natijasini boshqa bo'limlarga o'tkazishingiz yoki tahrirlashingiz mumkin!</i>\n\n"
         "👇 <i>Kerakli bo'limni tanlang:</i>"
     )
-    await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard())
+    await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin))
 
 
 @router.message(F.text == "ℹ️ Yordam")
@@ -1142,3 +1150,349 @@ async def process_instagram_download(message: Message, url: str):
     finally:
         # Faylni darhol o'chirmaymiz, foydalanuvchi "audio ajratish" tugmasini bosishi mumkin (yoki 10 daqiqadan keyin tozalanadi)
         pass
+
+
+# =====================================================================
+# QO'RIQCHI (ACCESS GUARD) VA ADMIN BOSHQARUV HANDLERLARI
+# =====================================================================
+
+def get_admin_panel_text() -> str:
+    """Qo'riqchi boshqaruv paneli ma'lumotlari"""
+    is_restricted = access_guard.is_restricted_mode()
+    mode_str = "🔒 <b>Cheklangan rejim (Faqat ruxsat berilganlar)</b>" if is_restricted else "🔓 <b>Ochiq rejim (Barcha foydalanuvchilar)</b>"
+    users_count = len(access_guard.get_allowed_users())
+    admins_count = len(access_guard.get_admins())
+    return (
+        "🛡 <b>QO'RIQCHI (ACCESS GUARD) BOSHQARUV PANELI</b>\n\n"
+        f"📊 <b>Tizim holati:</b> {mode_str}\n"
+        f"👥 <b>Ruxsat berilgan foydalanuvchilar:</b> {users_count} nafar\n"
+        f"👑 <b>Administratorlar soni:</b> {admins_count} nafar\n\n"
+        "Quyidagi boshqaruv buyruqlaridan foydalanishingiz mumkin:\n"
+        "• <code>/users</code> — Ruxsat berilganlar ro'yxati\n"
+        "• <code>/add_user &lt;id&gt; [ism]</code> — Yangi foydalanuvchi qo'shish\n"
+        "• <code>/remove_user &lt;id&gt;</code> — Foydalanuvchidan ruxsatni olish\n"
+        "• <code>/add_admin &lt;id&gt; [ism]</code> — Yangi admin tayinlash\n"
+        "• <code>/toggle_guard</code> — Rejimni o'zgartirish (Ochiq/Cheklangan)\n"
+        "• <code>/my_id</code> — O'z ID raqamingizni ko'rish"
+    )
+
+
+def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
+    """Qo'riqchi boshqaruv tugmalari"""
+    is_restricted = access_guard.is_restricted_mode()
+    toggle_text = "🔓 Ochiq rejimga o'tish" if is_restricted else "🔒 Cheklangan rejimga o'tish"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="👥 Foydalanuvchilar ro'yxati", callback_data="adm:list_users"),
+                InlineKeyboardButton(text=toggle_text, callback_data="adm:toggle_mode")
+            ],
+            [
+                InlineKeyboardButton(text="➕ User qo'shish yo'riqnomasi", callback_data="adm:help_add"),
+                InlineKeyboardButton(text="➖ User o'chirish yo'riqnomasi", callback_data="adm:help_remove")
+            ]
+        ]
+    )
+
+
+@router.message(Command("admin"))
+@router.message(Command("qoriqchi"))
+@router.message(F.text == "🛡 Qo'riqchi (Admin)")
+async def handle_admin_panel(message: Message):
+    """Admin paneli"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 <b>Kechirasiz, ushbu bo'lim faqat administratorlar uchun!</b>", parse_mode="HTML")
+        return
+    await message.answer(
+        get_admin_panel_text(),
+        parse_mode="HTML",
+        reply_markup=get_admin_panel_keyboard()
+    )
+
+
+@router.callback_query(F.data == "adm:toggle_mode")
+async def handle_adm_toggle_mode(callback: CallbackQuery):
+    """Cheklangan / Ochiq rejimni almashtirish"""
+    if not access_guard.is_admin(callback.from_user.id):
+        await callback.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        return
+    new_mode = access_guard.toggle_restricted_mode()
+    mode_str = "🔒 Cheklangan rejim faollashdi" if new_mode else "🔓 Ochiq rejim faollashdi"
+    await callback.answer(mode_str, show_alert=True)
+    try:
+        await callback.message.edit_text(
+            get_admin_panel_text(),
+            parse_mode="HTML",
+            reply_markup=get_admin_panel_keyboard()
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "adm:list_users")
+@router.message(Command("users"))
+async def handle_list_users(event: Message | CallbackQuery):
+    """Ruxsat berilganlar ro'yxati"""
+    user_id = event.from_user.id
+    if not access_guard.is_admin(user_id):
+        if isinstance(event, CallbackQuery):
+            await event.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        else:
+            await event.reply("🔒 Faqat adminlar uchun!")
+        return
+
+    users = access_guard.get_allowed_users()
+    if not users:
+        msg = "ℹ️ Hozircha ruxsat berilgan qo'shimcha foydalanuvchilar mavjud emas."
+    else:
+        msg = f"👥 <b>Ruxsat berilgan foydalanuvchilar ({len(users)} ta):</b>\n\n"
+        for idx, (uid, info) in enumerate(users.items(), 1):
+            uname = f"@{info.get('username')}" if info.get('username') else "username yo'q"
+            msg += (
+                f"<b>{idx}. {info.get('name', 'Nomsiz')}</b> ({uname})\n"
+                f"   🆔 ID: <code>{uid}</code>\n"
+                f"   📅 Qo'shildi: {info.get('added_at', '-')}\n"
+                f"   👑 Qo'shdi: {info.get('added_by', '-')}\n\n"
+            )
+
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        await event.message.answer(msg, parse_mode="HTML")
+    else:
+        await event.answer(msg, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "adm:help_add")
+async def handle_adm_help_add(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.answer(
+        "➕ <b>Foydalanuvchi qo'shish yo'riqnomasi:</b>\n\n"
+        "Foydalanuvchini botga kiritish uchun quyidagi buyruqni yuboring:\n"
+        "<code>/add_user &lt;TELEGRAM_ID&gt; [ism]</code>\n\n"
+        "Misol: <code>/add_user 123456789 Ali</code>\n\n"
+        "💡 <i>Foydalanuvchi o'z ID raqamini bilish uchun botga <code>/my_id</code> deb yozishi kifoya.</i>",
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "adm:help_remove")
+async def handle_adm_help_remove(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.answer(
+        "➖ <b>Foydalanuvchini o'chirish yo'riqnomasi:</b>\n\n"
+        "Foydalanuvchining ruxsatini bekor qilish uchun quyidagi buyruqni yuboring:\n"
+        "<code>/remove_user &lt;TELEGRAM_ID&gt;</code>\n\n"
+        "Misol: <code>/remove_user 123456789</code>",
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data.startswith("auth_approve:"))
+async def handle_auth_approve(callback: CallbackQuery):
+    """Admin yangi foydalanuvchiga ruxsat berishi"""
+    if not access_guard.is_admin(callback.from_user.id):
+        await callback.answer("🔒 Faqat administratorlar tasdiqlashi mumkin!", show_alert=True)
+        return
+
+    target_id_str = callback.data.split(":")[1]
+    target_id = int(target_id_str)
+
+    req_info = access_guard.data.get("pending_requests", {}).get(target_id_str, {})
+    target_name = req_info.get("name", f"Foydalanuvchi_{target_id}")
+    target_username = req_info.get("username", "")
+
+    access_guard.add_user(
+        user_id=target_id,
+        name=target_name,
+        username=target_username,
+        added_by=callback.from_user.full_name
+    )
+
+    await callback.message.edit_text(
+        f"✅ <b>Ruxsat berildi!</b>\n\n"
+        f"👤 <b>Foydalanuvchi:</b> {target_name}\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>\n"
+        f"👑 <b>Tasdiqlagan admin:</b> {callback.from_user.full_name}",
+        parse_mode="HTML"
+    )
+
+    try:
+        await callback.bot.send_message(
+            chat_id=target_id,
+            text=(
+                "🎉 <b>Tabriklaymiz!</b>\n\n"
+                "Administrator sizga botdan foydalanish uchun ruxsat berdi.\n\n"
+                "Boshlash uchun: /start"
+            ),
+            reply_markup=get_main_keyboard(),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchiga ({target_id}) tasdiq xabarini jo'natishda xatolik: {e}")
+
+
+@router.callback_query(F.data.startswith("auth_deny:"))
+async def handle_auth_deny(callback: CallbackQuery):
+    """Admin foydalanuvchi so'rovini rad etishi"""
+    if not access_guard.is_admin(callback.from_user.id):
+        await callback.answer("🔒 Faqat administratorlar rad eta oladi!", show_alert=True)
+        return
+
+    target_id_str = callback.data.split(":")[1]
+    target_id = int(target_id_str)
+
+    if target_id_str in access_guard.data.get("pending_requests", {}):
+        del access_guard.data["pending_requests"][target_id_str]
+        access_guard.save()
+
+    await callback.message.edit_text(
+        f"❌ <b>Ruxsat so'rovi rad etildi.</b>\n\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>\n"
+        f"👑 <b>Admin:</b> {callback.from_user.full_name}",
+        parse_mode="HTML"
+    )
+
+    try:
+        await callback.bot.send_message(
+            chat_id=target_id,
+            text=(
+                "❌ <b>Ruxsat so'rovingiz rad etildi</b>\n\n"
+                "Kechirasiz, administrator ushbu botdan foydalanish so'rovingizni rad etdi."
+            ),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+
+@router.message(Command("add_user"))
+async def handle_add_user_cmd(message: Message):
+    """Admin qo'lda user qo'shishi: /add_user <id> [ism]"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 Faqat adminlar uchun!")
+        return
+
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.reply(
+            "⚠️ <b>Noto'g'ri format!</b>\n"
+            "Format: <code>/add_user &lt;TELEGRAM_ID&gt; [ism]</code>\n"
+            "Misol: <code>/add_user 123456789 Ali</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_id = int(parts[1])
+    target_name = parts[2] if len(parts) > 2 else f"Foydalanuvchi_{target_id}"
+
+    access_guard.add_user(
+        user_id=target_id,
+        name=target_name,
+        added_by=message.from_user.full_name
+    )
+
+    await message.reply(
+        f"✅ <b>Foydalanuvchi muvaffaqiyatli qo'shildi!</b>\n\n"
+        f"👤 <b>Ism:</b> {target_name}\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>",
+        parse_mode="HTML"
+    )
+
+    try:
+        await message.bot.send_message(
+            chat_id=target_id,
+            text=(
+                "🎉 <b>Tabriklaymiz!</b>\n\n"
+                "Administrator sizga botdan foydalanish uchun ruxsat berdi.\n\n"
+                "Boshlash uchun: /start"
+            ),
+            reply_markup=get_main_keyboard(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+
+@router.message(Command("remove_user"))
+async def handle_remove_user_cmd(message: Message):
+    """Admin user ruxsatini bekor qilishi: /remove_user <id>"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 Faqat adminlar uchun!")
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.reply(
+            "⚠️ <b>Noto'g'ri format!</b>\n"
+            "Format: <code>/remove_user &lt;TELEGRAM_ID&gt;</code>\n"
+            "Misol: <code>/remove_user 123456789</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_id = int(parts[1])
+    if access_guard.remove_user(target_id):
+        await message.reply(
+            f"✅ Foydalanuvchi (ID: <code>{target_id}</code>) ro'yxatdan o'chirildi va ruxsati bekor qilindi.",
+            parse_mode="HTML"
+        )
+    else:
+        await message.reply(
+            f"ℹ️ Bunday ID (<code>{target_id}</code>) ga ega foydalanuvchi topilmadi.",
+            parse_mode="HTML"
+        )
+
+
+@router.message(Command("add_admin"))
+async def handle_add_admin_cmd(message: Message):
+    """Yangi admin tayinlash: /add_admin <id> [ism]"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 Faqat adminlar uchun!")
+        return
+
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.reply(
+            "⚠️ <b>Noto'g'ri format!</b>\n"
+            "Format: <code>/add_admin &lt;TELEGRAM_ID&gt; [ism]</code>\n"
+            "Misol: <code>/add_admin 123456789 Adminbek</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_id = int(parts[1])
+    target_name = parts[2] if len(parts) > 2 else f"Admin_{target_id}"
+
+    access_guard.add_admin(target_id, name=target_name)
+    await message.reply(
+        f"👑 <b>Yangi administrator tayinlandi!</b>\n\n"
+        f"👤 <b>Ism:</b> {target_name}\n"
+        f"🆔 <b>ID:</b> <code>{target_id}</code>",
+        parse_mode="HTML"
+    )
+
+
+@router.message(Command("toggle_guard"))
+async def handle_toggle_guard_cmd(message: Message):
+    """Qo'riqchi rejimini o'zgartirish buyrug'i"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 Faqat adminlar uchun!")
+        return
+
+    new_mode = access_guard.toggle_restricted_mode()
+    mode_text = (
+        "🔒 <b>Cheklangan rejim yoqildi:</b> Endi faqat ruxsat berilgan foydalanuvchilar kira oladi."
+        if new_mode else
+        "🔓 <b>Ochiq rejim yoqildi:</b> Endi barcha foydalanuvchilar botdan foydalanishi mumkin."
+    )
+    await message.reply(mode_text, parse_mode="HTML")
+
+
+@router.message(Command("my_id"))
+@router.message(Command("id"))
+async def handle_my_id_cmd(message: Message):
+    """Foydalanuvchining o'z ID sini ko'rish buyrug'i"""
+    await message.reply(
+        f"🆔 <b>Sizning Telegram ID raqamingiz:</b> <code>{message.from_user.id}</code>",
+        parse_mode="HTML"
+    )

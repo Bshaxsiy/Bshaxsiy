@@ -1,8 +1,33 @@
-# 🤖 Ko'p Funksiyali Telegram Bot (AI Tahlil, Hujjatlar, Deep Research, Slaydlar, Excel & Video)
+# 🤖 Ko'p Funksiyali Telegram Bot (AI Tahlil, Hujjatlar, Deep Research, Slaydlar, Excel & Qo'riqchi)
 
 Telegram boti: **@Bshaxsiy_bot**
 
-Ushbu bot eng zamonaviy sun'iy intellekt (**Google Gemini**) va media vositalari bilan qurollangan bo'lib, quyidagi **5 ta ixtisoslashgan bo'lim** hamda **AI Chat** rejimida ishlaydi:
+Ushbu bot eng zamonaviy sun'iy intellekt (**Google Gemini**) va media vositalari bilan qurollangan bo'lib, **Qo'riqchi (Access Guard)** xavfsizlik tizimi, **5 ta ixtisoslashgan bo'lim** hamda **AI Chat** rejimida ishlaydi:
+
+---
+
+## 🛡 Qo'riqchi (Access Guard / Gatekeeper) Tizimi
+
+Botdan faqat ruxsat berilgan (cheklangan) foydalanuvchilar foydalanishi uchun to'liq xavfsizlik tizimi joriy etildi:
+
+1. **Ruxsatsiz foydalanuvchilar bloklanishi:**
+   - Botga ruxsati yo'q odam yozganida barcha funksiyalar yopiq bo'ladi.
+   - Foydalanuvchiga uning **Telegram ID** raqami ko'rsatilib, **«📩 Administratorga ruxsat so'rovi yuborish»** tugmasi beriladi.
+2. **Bir bosishda tasdiqlash (Interactive Approval):**
+   - Foydalanuvchi so'rov yuborganida, barcha administratorlarga tugmali xabar boradi:
+     - `[✅ Ruxsat berish]`
+     - `[❌ Rad etish]`
+   - Admin ruxsat bergan zahoti, foydalanuvchiga avtomatik xabar boradi va bot ochiladi!
+3. **Admin sifatida kirish:**
+   - Botga `/admin_login <parol>` (standart parol `.env` dagi: `admin777`) yozgan foydalanuvchi darhol doimiy Administrator maqomini oladi.
+4. **Qo'riqchi buyruqlari:**
+   - `/admin` yoki menyudagi **«🛡 Qo'riqchi (Admin)»** tugmasi — boshqaruv paneli.
+   - `/users` — Ruxsat berilgan barcha foydalanuvchilar ro'yxati.
+   - `/add_user <id> [ism]` — ID orqali yangi foydalanuvchiga ruxsat berish.
+   - `/remove_user <id>` — Foydalanuvchidan ruxsatni qaytarib olish.
+   - `/add_admin <id> [ism]` — Yangi admin tayinlash.
+   - `/toggle_guard` — Cheklangan (yopiq) yoki Ochiq rejimga o'tkazish.
+   - `/my_id` — O'zining Telegram ID raqamini ko'rish.
 
 ---
 
@@ -58,28 +83,20 @@ Botda hosil qilingan **har qanday natija** ostida 2 ta qulay tugma taqdim etilad
 
 ---
 
-## 🎙 Audio va Ovozli Xabarlar Tahlili
-- Botga ovozli xabar yoki audio fayl yuborilganda, uni quyidagi formatlarda qabul qilish imkoniyati:
-  - 📝 **Matn:** Matn ko'rinishida yozma tahlil.
-  - 🎙 **Ovozli (Audio):** Tabiiy o'zbek ovozida (`edge-tts`) ovozli xabar.
-  - 📄 **Word (.docx):** Word fayli.
-  - 📑 **PDF (.pdf):** PDF hujjati.
-  - ✨ **Barchasi birga (Hammasi):** Barcha formatlarni birdaniga qabul qilish.
-
----
-
 ## 📂 Loyiha Tuzilishi
 
 ```text
-├── .env                # Bot tokeni va Gemini API kaliti (maxfiy)
+├── .env                # Bot tokeni, Gemini API kaliti va admin sozlamalari (maxfiy)
 ├── .env.example        # Sozlamalar namunasi
 ├── config.py           # Konfiguratsiya va doimiy parametrlar
+├── access_guard.py     # Qo'riqchi (Access Guard / Gatekeeper) tizimi
+├── guard_middleware.py # Aiogram middleware xavfsizlik tekshiruvi
 ├── ai_service.py       # Google Gemini AI (Chat, Deep Research, Hujjat tahlili, Tahrirlash)
 ├── tts_service.py      # Matnni ovozga aylantirish (Edge TTS va FFmpeg)
-├── document_service.py # Word (.docx), PDF (.pdf), Excel (.xlsx) va PPTX taqdimot generatori
-├── downloader.py       # yt-dlp orqali videolarni yuklash va MP3 ajratish
-├── video_converter.py  # FFmpeg orqali dumaloq video tayyorlash
-├── handlers.py         # Bot menyusi, bo'limlar, transfer va edit tugmalari
+├── document_service.py # Word, PDF, Excel va PPTX taqdimot generatori
+├── downloader.py       # Videolarni yuklash va MP3 ajratish
+├── video_converter.py  # Dumaloq video tayyorlash
+├── handlers.py         # Bot menyusi, bo'limlar va admin boshqaruvi
 ├── main.py             # Asosiy ishga tushirish moduli
 ├── requirements.txt    # Kerakli Python kutubxonalari
 └── README.md           # Qo'llanma
@@ -89,26 +106,24 @@ Botda hosil qilingan **har qanday natija** ostida 2 ta qulay tugma taqdim etilad
 
 ## 🚀 O'rnatish va Ishga Tushirish
 
-### 1. Telegram Bot Tokenini Olish
-Telegramda [@BotFather](https://t.me/BotFather) botiga kiring va `/newbot` buyrug'i orqali yangi bot yarating.
-
-### 2. Google Gemini API Kalitini Olish
-[Google AI Studio](https://aistudio.google.com/app/apikey) sahifasidan bepul API kalit oling.
-
-### 3. .env Faylini Sozlash
+### 1. .env Faylini Sozlash
 Loyiha papkasida `.env` faylini quyidagicha to'ldiring:
 ```env
 BOT_TOKEN=YOUR_BOT_TOKEN_HERE
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-3.8-flash
+
+# Qo'riqchi tizimi sozlamalari:
+ADMIN_IDS=123456789
+ADMIN_PASSWORD=admin777
 ```
 
-### 4. Kutubxonalarni O'rnatish
+### 2. Kutubxonalarni O'rnatish
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Botni Ishga Tushirish
+### 3. Botni Ishga Tushirish
 ```bash
 python main.py
 ```

@@ -22,3 +22,15 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 DOWNLOADS_DIR = BASE_DIR / "downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Ma'lumotlar va ruxsatlar bazasi papkasi
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Qo'riqchi (Access Control) sozlamalari
+# Masalan: ADMIN_IDS=123456789,987654321
+raw_admin_ids = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS = [int(i.strip()) for i in raw_admin_ids.split(",") if i.strip().isdigit()]
+
+# Admin bo'lish uchun maxfiy login parol
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin777")
+
