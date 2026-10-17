@@ -124,6 +124,21 @@ pip install -r requirements.txt
 ```
 
 ### 3. Botni Ishga Tushirish
-```bash
-python main.py
-```
+
+#### A) Noutbukda Antigravity yopiq bo'lganda ham orqa fonda ishlashi:
+- **`start_bot.bat`** faylini 2 marta bosing: bot orqa fonda butunlay yashirin tarzda (`pythonw`) ishga tushadi. Antigravity yoki oynalarni yopsangiz ham bot ishlashda davom etadi!
+- **`stop_bot.bat`** faylini bossangiz: fonda ishlayotgan bot to'xtatiladi.
+- **`install_startup.bat`**: Windows yoqilishi (noutbuk yoqilishi) bilan bot avtomatik ishga tushishi uchun sozlangan.
+
+#### B) Noutbuk butunlay o'chiq bo'lganda ham 24/7 uzluksiz ishlashi (Bulutli bepul server):
+Noutbuk quvvati o'chirilganda ham bot to'xtamasdan ishlashi uchun [Render.com](https://render.com) (bepul 24/7 bulut) ga 2 daqiqada ulab qo'yish mumkin:
+1. [Render.com](https://render.com) saytiga kiring va GitHub profilingiz orqali kiring.
+2. **"New +"** -> **"Background Worker"** (yoki **"Web Service"**) tugmasini bosing.
+3. O'zingizning **`Bshaxsiy`** nomli GitHub repozitoriyangizni tanlang.
+4. **Environment Variables** bo'limiga quyidagilarni kiriting:
+   - `BOT_TOKEN`: Sizning Telegram bot tokeningiz
+   - `GEMINI_API_KEY`: Google Gemini API kalitingiz
+   - `GEMINI_MODEL`: `gemini-3.8-flash`
+   - `ADMIN_PASSWORD`: `admin777`
+5. **"Create Service"** tugmasini bosing.
+Bot bulutli serverda 24 soat, 7 kun, noutbukingiz o'chiq bo'lsa ham uzluksiz ishlaydi!
