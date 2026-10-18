@@ -41,6 +41,7 @@ from document_service import (
     extract_text_from_file,
 )
 from access_guard import access_guard
+from archive_service import archive_service
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -65,23 +66,46 @@ result_store: dict[str, dict] = {}
 pending_docs: dict[str, dict] = {}
 
 
-def store_result(title: str, content: str, user_name: str = "") -> str:
-    """Natijani xotiraga saqlash va res_id qaytarish"""
+def store_result(
+    title: str,
+    content: str,
+    user_name: str = "",
+    user_id: int = 0,
+    category: str = "chat"
+) -> str:
+    """Natijani xotiraga va doimiy SQLite arxivga saqlash hamda res_id qaytarish"""
     res_id = uuid.uuid4().hex[:8]
     result_store[res_id] = {
         "title": title or "Tahlil Natijasi",
         "content": content,
         "user_name": user_name,
+        "user_id": user_id,
+        "category": category,
         "created_at": datetime.now()
     }
     if len(result_store) > 400:
         oldest_key = next(iter(result_store))
         result_store.pop(oldest_key, None)
+
+    # Doimiy SQLite arxiv bazasiga saqlash
+    if user_id:
+        try:
+            archive_service.save_item(
+                res_id=res_id,
+                user_id=user_id,
+                user_name=user_name,
+                title=title,
+                content=content,
+                category=category
+            )
+        except Exception as e:
+            logger.warning(f"Arxivga saqlashda ogohlantirish: {e}")
+
     return res_id
 
 
 def get_main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
-    """Asosiy bo'limlar menyusi (Adminlar uchun Qo'riqchi tugmasi bilan)"""
+    """Asosiy bo'limlar menyusi (🗄 Arxiv va Adminlar uchun Qo'riqchi tugmasi bilan)"""
     keyboard = [
         [
             KeyboardButton(text="📑 Hujjatlar tahlili"),
@@ -94,6 +118,9 @@ def get_main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="📊 PDF, WORD, EXCEL"),
             KeyboardButton(text="🤖 AI Chat")
+        ],
+        [
+            KeyboardButton(text="🗄 Arxiv")
         ]
     ]
     if is_admin:
@@ -257,6 +284,109 @@ def get_video_options_keyboard(video_path: str) -> InlineKeyboardMarkup:
     )
 
 
+def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page: int = 5) -> InlineKeyboardMarkup:
+    """Arxiv ro'yxati va sahifalash klaviaturasi"""
+    kb = []
+    category_icons = {
+        "doc": "📑",
+        "research": "🔬",
+        "audio": "🎙",
+        "image": "📸",
+        "slides": "📽",
+        "office": "📊",
+        "chat": "🤖"
+    }
+
+    for item in items:
+        cat_icon = category_icons.get(item.get("category", "chat"), "📌")
+        title_snippet = item["title"][:28]
+        created_str = str(item.get("created_at", ""))
+        date_str = created_str[5:16] if len(created_str) >= 16 else created_str
+        btn_text = f"{cat_icon} [{date_str}] {title_snippet}"
+        kb.append([
+            InlineKeyboardButton(text=btn_text, callback_data=f"arx:view:{item['id']}")
+        ])
+
+    # Sahifalash (Pagination) tugmalari
+    nav_row = []
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"arx:p:{page - 1}"))
+    nav_row.append(InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="arx:noop"))
+    if (page + 1) * per_page < total_count:
+        nav_row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"arx:p:{page + 1}"))
+    if nav_row:
+        kb.append(nav_row)
+
+    # Boshqaruv tugmalari
+    if total_count > 0:
+        kb.append([
+            InlineKeyboardButton(text="🗑 Barcha arxivni tozalash", callback_data="arx:confirm_clear")
+        ])
+    kb.append([
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"arx:p:{page}"),
+        InlineKeyboardButton(text="🏠 Bosh menyu", callback_data="arx:home")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_archive_item_keyboard(item_id: str) -> InlineKeyboardMarkup:
+    """Tanlangan bitta arxiv yozuvini ko'rish va boshqarish tugmalari"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📖 To'liq matnni o'qish", callback_data=f"arx:read:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📄 Word (.docx)", callback_data=f"tr:docx:{item_id}"),
+                InlineKeyboardButton(text="📑 PDF (.pdf)", callback_data=f"tr:pdf:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📊 Excel (.xlsx)", callback_data=f"tr:xlsx:{item_id}"),
+                InlineKeyboardButton(text="📽 Prezentatsiya", callback_data=f"tr:pptx:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🎙 Ovozli qilish", callback_data=f"tr:voice:{item_id}"),
+                InlineKeyboardButton(text="🔬 Deep Research", callback_data=f"tr:deep:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{item_id}"),
+                InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🗑 Ushbu so'rovni o'chirish", callback_data=f"arx:confirm_del:{item_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Arxiv ro'yxatiga qaytish", callback_data="arx:p:0")
+            ]
+        ]
+    )
+
+
+def get_archive_delete_confirm_keyboard(item_id: str) -> InlineKeyboardMarkup:
+    """Yozuvni o'chirishni tasdiqlash klaviaturasi"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Ha, o'chirilsin", callback_data=f"arx:do_del:{item_id}"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"arx:view:{item_id}")
+            ]
+        ]
+    )
+
+
+def get_archive_clear_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Butun arxivni tozalashni tasdiqlash klaviaturasi"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🗑 Ha, barchasini tozalash", callback_data="arx:do_clear"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="arx:p:0")
+            ]
+        ]
+    )
+
+
 def save_gemini_key_to_env(key: str):
     """Yangi Gemini API kalitini .env fayliga yozib qo'yish"""
     env_path = BASE_DIR / ".env"
@@ -323,7 +453,8 @@ async def handle_start(message: Message):
         "3. 🎬 <b>Musiqa va Video:</b> Instagram/video yuklash, dumaloq video (krujok) va MP3 ajratish.\n"
         "4. 📽 <b>Slaydlar, Prezentatsiya:</b> Mavzudan professional PowerPoint (<code>.pptx</code>) taqdimot yaratish.\n"
         "5. 📊 <b>PDF, WORD, EXCEL:</b> Hujjatlarni generatsiya qilish va jadvallar tuzish.\n"
-        "6. 🤖 <b>AI Chat:</b> Erkin muloqot va maslahatlar.\n\n"
+        "6. 🤖 <b>AI Chat:</b> Erkin muloqot va maslahatlar.\n"
+        "7. 🗄 <b>Arxiv:</b> Barcha so'rovlar va yaratilgan hujjatlar tarixi, ularni ko'rish, yuklab olish va o'chirish.\n\n"
         "💡 <i>Har qanday tahlil natijasini boshqa bo'limlarga o'tkazishingiz yoki tahrirlashingiz mumkin!</i>\n\n"
         "👇 <i>Kerakli bo'limni tanlang:</i>"
     )
@@ -347,6 +478,8 @@ async def handle_help(message: Message):
         "Mavzu yoki matn yuboring -> bot tayyor <code>.pptx</code> PowerPoint taqdimotini yaratib beradi.\n\n"
         "📊 <b>5. PDF, WORD, EXCEL:</b>\n"
         "Matn yuborib uni chiroyli formatlangan Word, PDF yoki Excel jadvali sifatida yuklab oling.\n\n"
+        "🗄 <b>6. Arxiv va Tarix:</b>\n"
+        "Botda qilgan barcha so'rovlaringiz va tahlillaringiz arxivingizda saqlanadi. Ularni istalgan payt ko'rish, qayta yuklab olish yoki keraksizlarini o'chirish mumkin.\n\n"
         "🔁 <b>O'tkazish va Tahrirlash:</b>\n"
         "Har bir natija ostidagi <b>«📂 Bo'limga o'tkazish»</b> tugmasi orqali hisobotni boshqa formatga o'tkazishingiz, <b>«✏️ Tahrirlash»</b> orqali kengaytirishingiz mumkin!"
     )
@@ -448,7 +581,13 @@ async def nav_ai_chat(message: Message):
                 await status_msg.delete()
             except Exception:
                 pass
-            res_id = store_result(title=prompt[:30], content=response, user_name=message.from_user.full_name)
+            res_id = store_result(
+                title=prompt[:30],
+                content=response,
+                user_name=message.from_user.full_name or "Foydalanuvchi",
+                user_id=message.from_user.id,
+                category="chat"
+            )
             await send_ai_response(message, response, res_id=res_id)
             return
 
@@ -460,6 +599,38 @@ async def nav_ai_chat(message: Message):
         "• 🏠 Bosh menyu: quyidagi tugma",
         parse_mode="HTML",
         reply_markup=get_section_keyboard()
+    )
+
+
+@router.message(F.text == "🗄 Arxiv")
+@router.message(Command("arxiv"))
+@router.message(Command("archive"))
+async def nav_archive(message: Message):
+    """🗄 Arxiv bo'limi - barcha saqlangan so'rovlarni ko'rish va boshqarish"""
+    user_id = message.from_user.id
+    total_count = archive_service.get_user_count(user_id)
+
+    if total_count == 0:
+        empty_msg = (
+            "🗄 <b>Sizning arxivingiz hozircha bo'sh.</b>\n\n"
+            "Botdan foydalanib savollar berganingizda, hujjatlar tahlil qilganingizda yoki taqdimotlar "
+            "yaratganingizda, barcha so'rovlar va tayyor natijalar avtomatik ravishda shu yerda saqlanadi.\n\n"
+            "Keyinchalik ularni istalgan vaqtda qayta ko'rishingiz, yuklab olishingiz yoki o'chirib tashlashingiz mumkin."
+        )
+        await message.answer(empty_msg, parse_mode="HTML")
+        return
+
+    items = archive_service.get_user_items(user_id=user_id, limit=5, offset=0)
+    text = (
+        f"🗄 <b>Sizning so'rovlar arxivingiz</b>\n"
+        f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
+        f"👇 <i>Kerakli so'rovni tanlang: uni qayta o'qishingiz, Word/PDF/Excel/Audio formatda yuklab olishingiz "
+        f"yoki keraksiz bo'lsa o'chirib tashlashingiz mumkin:</i>"
+    )
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count)
     )
 
 
@@ -685,7 +856,7 @@ async def handle_document_section_callback(callback: CallbackQuery):
             pass
 
         title = f"{filename}: {section_title[:30]}"
-        res_id = store_result(title=title, content=analysis, user_name=user_name)
+        res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
         result_markup = get_document_result_keyboard(
             res_id=res_id,
             doc_id=doc_id,
@@ -781,7 +952,7 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
         )
 
         user_name = item.get("user_name", "Foydalanuvchi")
-        res_id = store_result(title="Audio Tahlil", content=response, user_name=user_name)
+        res_id = store_result(title="Audio Tahlil", content=response, user_name=user_name, user_id=item["user_id"], category="audio")
 
         if action in ("text", "all"):
             try:
@@ -880,8 +1051,19 @@ async def handle_content_action_callback(callback: CallbackQuery):
     res_id = parts[2]
 
     if res_id not in result_store:
-        await callback.answer("Ma'lumot xotirada eskirgan.", show_alert=True)
-        return
+        arch_item = archive_service.get_item(res_id)
+        if arch_item:
+            result_store[res_id] = {
+                "title": arch_item["title"],
+                "content": arch_item["content"],
+                "user_name": arch_item["user_name"],
+                "user_id": arch_item["user_id"],
+                "category": arch_item.get("category", "chat"),
+                "created_at": arch_item["created_at"]
+            }
+        else:
+            await callback.answer("Ma'lumot xotirada eskirgan.", show_alert=True)
+            return
 
     if sub_act == "tr":
         await callback.message.edit_reply_markup(reply_markup=get_transfer_keyboard(res_id))
@@ -909,8 +1091,20 @@ async def handle_transfer_execution(callback: CallbackQuery):
 
     item = result_store.get(res_id)
     if not item:
-        await callback.answer("Ushbu ma'lumot xotirada topilmadi.", show_alert=True)
-        return
+        arch_item = archive_service.get_item(res_id)
+        if arch_item:
+            item = {
+                "title": arch_item["title"],
+                "content": arch_item["content"],
+                "user_name": arch_item["user_name"],
+                "user_id": arch_item["user_id"],
+                "category": arch_item.get("category", "chat"),
+                "created_at": arch_item["created_at"]
+            }
+            result_store[res_id] = item
+        else:
+            await callback.answer("Ushbu ma'lumot xotirada topilmadi.", show_alert=True)
+            return
 
     content = item["content"]
     title = item["title"]
@@ -956,7 +1150,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
         try:
             await callback.message.answer_document(
                 document=FSInputFile(pptx_path, filename=f"{title[:20]}.pptx"),
-                caption=f"📽 <b>PowerPoint taqdimoti yaratildi!</b>\n<i>Mavzu: {title}</i>",
+                caption=f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id)
             )
@@ -976,7 +1170,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
         try:
             await callback.message.answer_document(
                 document=FSInputFile(xlsx_path, filename=f"{title[:20]}.xlsx"),
-                caption=f"📊 <b>Excel jadvali yaratildi!</b>\n<i>Mavzu: {title}</i>",
+                caption=f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id)
             )
@@ -992,7 +1186,13 @@ async def handle_transfer_execution(callback: CallbackQuery):
             await status_msg.delete()
         except Exception:
             pass
-        new_res_id = store_result(title=f"Deep Research: {title}", content=deep_res, user_name=user_name)
+        new_res_id = store_result(
+            title=f"Deep Research: {title}",
+            content=deep_res,
+            user_name=user_name,
+            user_id=callback.from_user.id,
+            category="research"
+        )
         await send_ai_response(callback.message, deep_res, res_id=new_res_id)
 
     elif target == "voice":
@@ -1029,8 +1229,20 @@ async def handle_edit_execution(callback: CallbackQuery):
 
     item = result_store.get(res_id)
     if not item:
-        await callback.answer("Ma'lumot topilmadi.", show_alert=True)
-        return
+        arch_item = archive_service.get_item(res_id)
+        if arch_item:
+            item = {
+                "title": arch_item["title"],
+                "content": arch_item["content"],
+                "user_name": arch_item["user_name"],
+                "user_id": arch_item["user_id"],
+                "category": arch_item.get("category", "chat"),
+                "created_at": arch_item["created_at"]
+            }
+            result_store[res_id] = item
+        else:
+            await callback.answer("Ma'lumot topilmadi.", show_alert=True)
+            return
 
     content = item["content"]
     title = item["title"]
@@ -1054,8 +1266,252 @@ async def handle_edit_execution(callback: CallbackQuery):
     except Exception:
         pass
 
-    new_res_id = store_result(title=f"{title} (Tahrirlangan)", content=new_content, user_name=user_name)
+    new_res_id = store_result(
+        title=f"{title} (Tahrirlangan)",
+        content=new_content,
+        user_name=user_name,
+        user_id=callback.from_user.id,
+        category="chat"
+    )
     await send_ai_response(callback.message, new_content, res_id=new_res_id)
+
+
+# =====================================================================
+# 🗄 ARXIV INTERAKTIV CALLBACK HANDLERLARI
+# =====================================================================
+
+@router.callback_query(F.data.startswith("arx:"))
+async def handle_archive_callback(callback: CallbackQuery):
+    """Arxiv bo'limi interaktiv boshqaruv tugmalari"""
+    parts = callback.data.split(":")
+    if len(parts) < 2:
+        await callback.answer()
+        return
+
+    action = parts[1]
+    user_id = callback.from_user.id
+
+    if action == "noop":
+        await callback.answer()
+        return
+
+    if action == "home":
+        await callback.answer("Bosh menyu")
+        is_admin = access_guard.is_admin(user_id)
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer("🏠 <b>Bosh menyu</b>", parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin))
+        return
+
+    # Sahifalash: arx:p:{page}
+    if action == "p" and len(parts) >= 3:
+        page = int(parts[2]) if parts[2].isdigit() else 0
+        total_count = archive_service.get_user_count(user_id)
+        per_page = 5
+
+        if total_count == 0:
+            try:
+                await callback.message.edit_text(
+                    "🗄 <b>Arxivingiz bo'sh.</b>\n\nYangi so'rovlaringiz avtomatik ravishda saqlanib boradi.",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+            await callback.answer("Arxiv bo'sh.")
+            return
+
+        offset = page * per_page
+        items = archive_service.get_user_items(user_id=user_id, limit=per_page, offset=offset)
+
+        text = (
+            f"🗄 <b>Sizning so'rovlar arxivingiz</b>\n"
+            f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
+            f"👇 <i>Kerakli so'rovni tanlang:</i>"
+        )
+        try:
+            await callback.message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=get_archive_list_keyboard(items=items, page=page, total_count=total_count, per_page=per_page)
+            )
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    # So'rov tafsilotini ko'rish: arx:view:{item_id}
+    if action == "view" and len(parts) >= 3:
+        item_id = parts[2]
+        item = archive_service.get_item(item_id)
+        if not item:
+            await callback.answer("Ushbu yozuv arxivdan topilmadi yoki o'chirilgan.", show_alert=True)
+            return
+
+        # Natijalar keshiga kiritish (Word, PDF, Excel, Ovozli qilish tugmalari ishlashi uchun)
+        result_store[item_id] = {
+            "title": item["title"],
+            "content": item["content"],
+            "user_name": item["user_name"],
+            "user_id": item["user_id"],
+            "created_at": item["created_at"]
+        }
+
+        category_labels = {
+            "doc": "📑 Hujjat tahlili",
+            "research": "🔬 Deep Research",
+            "audio": "🎙 Audio tahlil",
+            "image": "📸 Rasm tahlili",
+            "slides": "📽 Slaydlar, Prezentatsiya",
+            "office": "📊 Hujjatlar va jadvallar",
+            "chat": "🤖 AI Chat suhbati"
+        }
+        cat_title = category_labels.get(item.get("category", "chat"), "📌 Saqlangan tahlil")
+
+        preview_text = item["content"][:400].strip()
+        if len(item["content"]) > 400:
+            preview_text += "..."
+
+        msg = (
+            f"🗄 <b>Arxivdagi so'rov:</b>\n\n"
+            f"🏷 <b>Bo'lim:</b> {cat_title}\n"
+            f"📅 <b>Vaqt:</b> <code>{item['created_at']}</code>\n"
+            f"📌 <b>Sarlavha:</b> <b>{item['title']}</b>\n\n"
+            f"📝 <b>Qisqacha mazmun:</b>\n<i>{preview_text}</i>\n\n"
+            f"👇 <i>Hujjatni yuklab olish, tahrirlash, ovozli eshitish yoki o'chirish:</i>"
+        )
+
+        try:
+            await callback.message.edit_text(
+                msg,
+                parse_mode="HTML",
+                reply_markup=get_archive_item_keyboard(item_id)
+            )
+        except Exception:
+            await callback.message.answer(
+                msg,
+                parse_mode="HTML",
+                reply_markup=get_archive_item_keyboard(item_id)
+            )
+        await callback.answer()
+        return
+
+    # To'liq matnni o'qish: arx:read:{item_id}
+    if action == "read" and len(parts) >= 3:
+        item_id = parts[2]
+        item = archive_service.get_item(item_id)
+        if not item:
+            await callback.answer("Yozuv topilmadi.", show_alert=True)
+            return
+
+        result_store[item_id] = {
+            "title": item["title"],
+            "content": item["content"],
+            "user_name": item["user_name"],
+            "user_id": item["user_id"],
+            "created_at": item["created_at"]
+        }
+        await callback.answer("To'liq matn yuborilmoqda...")
+        await send_ai_response(
+            callback.message,
+            item["content"],
+            res_id=item_id,
+            reply_markup=get_archive_item_keyboard(item_id)
+        )
+        return
+
+    # O'chirishni tasdiqlash so'rovi: arx:confirm_del:{item_id}
+    if action == "confirm_del" and len(parts) >= 3:
+        item_id = parts[2]
+        item = archive_service.get_item(item_id)
+        title = item["title"] if item else "Ushbu so'rov"
+        confirm_text = (
+            f"❓ <b>Haqiqatan ham ushbu yozuvni arxivdan o'chirmoqchimisiz?</b>\n\n"
+            f"📌 <i>«{title}»</i>\n\n"
+            f"⚠️ <i>O'chirilgandan so'ng ma'lumotni qayta tiklab bo'lmaydi.</i>"
+        )
+        try:
+            await callback.message.edit_text(
+                confirm_text,
+                parse_mode="HTML",
+                reply_markup=get_archive_delete_confirm_keyboard(item_id)
+            )
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    # O'chirishni bajarish: arx:do_del:{item_id}
+    if action == "do_del" and len(parts) >= 3:
+        item_id = parts[2]
+        success = archive_service.delete_item(item_id, user_id=user_id)
+        result_store.pop(item_id, None)
+
+        if success:
+            await callback.answer("✅ Yozuv arxivdan muvaffaqiyatli o'chirildi!", show_alert=True)
+        else:
+            await callback.answer("⚠️ Yozuv topilmadi yoki allaqachon o'chirilgan.", show_alert=True)
+
+        # Yangilangan ro'yxatga qaytarish
+        total_count = archive_service.get_user_count(user_id)
+        if total_count == 0:
+            try:
+                await callback.message.edit_text(
+                    "🗄 <b>Sizning arxivingiz tozalandi (bo'sh).</b>\n\nYangi so'rovlaringiz avtomatik tarzda saqlanadi.",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+            return
+
+        items = archive_service.get_user_items(user_id=user_id, limit=5, offset=0)
+        text = (
+            f"🗄 <b>Sizning so'rovlar arxivingiz</b>\n"
+            f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
+            f"👇 <i>Kerakli so'rovni tanlang:</i>"
+        )
+        try:
+            await callback.message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count)
+            )
+        except Exception:
+            pass
+        return
+
+    # Butun arxivni tozalashni tasdiqlash so'rovi: arx:confirm_clear
+    if action == "confirm_clear":
+        total_count = archive_service.get_user_count(user_id)
+        confirm_text = (
+            f"⚠️ <b>DIQQAT: Butun arxivni tozalash!</b>\n\n"
+            f"Barcha <b>{total_count} ta</b> saqlangan so'rov va natijalaringiz arxivdan butunlay o'chiriladi.\n\n"
+            f"Arxivni tozalashni tasdiqlaysizmi?"
+        )
+        try:
+            await callback.message.edit_text(
+                confirm_text,
+                parse_mode="HTML",
+                reply_markup=get_archive_clear_confirm_keyboard()
+            )
+        except Exception:
+            pass
+        await callback.answer()
+        return
+
+    # Butun arxivni tozalashni bajarish: arx:do_clear
+    if action == "do_clear":
+        deleted_count = archive_service.clear_user_archive(user_id)
+        await callback.answer(f"✅ Arxiv to'liq tozalandi ({deleted_count} ta so'rov o'chirildi)!", show_alert=True)
+        try:
+            await callback.message.edit_text(
+                "🗄 <b>Arxiv to'liq tozalandi.</b>\n\nYangi so'rovlaringiz avtomatik tarzda qaytadan saqlanadi.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+        return
 
 
 # =====================================================================
@@ -1176,7 +1632,13 @@ async def handle_photo_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title="Rasm tahlili", content=response, user_name=message.from_user.full_name)
+        res_id = store_result(
+            title="Rasm tahlili",
+            content=response,
+            user_name=message.from_user.full_name or "Foydalanuvchi",
+            user_id=user_id,
+            category="image"
+        )
         await send_ai_response(message, response, res_id=res_id)
 
     except Exception as e:
@@ -1226,7 +1688,7 @@ async def handle_text_message(message: Message):
                     pass
 
                 title = f"{filename}: {custom_query[:25]}"
-                res_id = store_result(title=title, content=analysis, user_name=user_name)
+                res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
                 result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False)
                 await send_ai_response(message, analysis, res_id=res_id, reply_markup=result_markup)
                 return
@@ -1252,7 +1714,7 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title=text[:35], content=report, user_name=user_name)
+        res_id = store_result(title=text[:35], content=report, user_name=user_name, user_id=user_id, category="research")
         await send_ai_response(message, report, res_id=res_id)
         return
 
@@ -1268,7 +1730,7 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title=f"Prezentatsiya: {text[:30]}", content=slides_text, user_name=user_name)
+        res_id = store_result(title=f"Prezentatsiya: {text[:30]}", content=slides_text, user_name=user_name, user_id=user_id, category="slides")
         try:
             await message.answer_document(
                 document=FSInputFile(pptx_path, filename=f"Prezentatsiya_{res_id}.pptx"),
@@ -1296,7 +1758,7 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title=text[:30], content=text, user_name=user_name)
+        res_id = store_result(title=text[:30], content=text, user_name=user_name, user_id=user_id, category="office")
         try:
             await message.answer_document(
                 document=FSInputFile(docx_path, filename=f"Hujjat_{res_id}.docx"),
@@ -1359,7 +1821,7 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name)
+        res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name, user_id=user_id, category="doc")
         await send_ai_response(message, analysis, res_id=res_id)
         return
 
@@ -1373,7 +1835,7 @@ async def handle_text_message(message: Message):
     except Exception:
         pass
 
-    res_id = store_result(title=text[:30], content=response, user_name=user_name)
+    res_id = store_result(title=text[:30], content=response, user_name=user_name, user_id=user_id, category="chat")
     await send_ai_response(message, response, res_id=res_id)
 
 
