@@ -62,6 +62,12 @@ class ArchiveService:
         """
         Yangi so'rov va natijani arxivga saqlash
         """
+        # Xatoliklar yoki ogohlantirishlarni arxivga saqlamaslik
+        clean_content = content.strip()
+        if clean_content.startswith("❌") or clean_content.startswith("⚠️") or "503 UNAVAILABLE" in clean_content:
+            logger.info("Xatolik xabari arxivga saqlanmadi.")
+            return res_id or uuid.uuid4().hex[:8]
+
         item_id = res_id or uuid.uuid4().hex[:8]
         summary = content[:200].replace("\n", " ").strip()
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
