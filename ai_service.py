@@ -318,12 +318,53 @@ class AIService:
 
         return "❌ <b>Audio tahlilida xatolik yuz berdi.</b> Iltimos, birozdan so'ng qayta urinib ko'ring."
 
-    async def deep_research(self, user_id: int, query: str) -> str:
+    async def translate_text(
+        self,
+        text: str,
+        target_lang: str = "uz",
+        source_lang: Optional[str] = "auto"
+    ) -> str:
+        """
+        Matnni tanlangan tilga (O'zbek, Rus, Ingliz) professional, aniq va grammatik xatolarsiz tarjima qilish
+        """
+        lang_names = {
+            "uz": "SOF ADABIY O'ZBEK TILI",
+            "ru": "ЛИТЕРАТУРНЫЙ РУССКИЙ ЯЗЫК",
+            "en": "PROFESSIONAL ENGLISH"
+        }
+        target_name = lang_names.get(target_lang, "O'ZBEK TILI")
+
+        prompt = (
+            f"Siz jahon darajasidagi oliy toifali professional tarjimonsiz.\n"
+            f"Topshiriq: Berilgan matnni diqqat bilan o'rganib, uni {target_name}ga to'liq, aniq, ravon va professional tarzda tarjima qiling.\n\n"
+            "🔴 TARJIMA QOIDALARI:\n"
+            "1. Asl matnning barcha ma'no nozikliklari, yuridik, moliyaviy va texnik atamalarini 100% to'g'ri yetkazing.\n"
+            "2. O'zbek tiliga tarjimada barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) aslo tushirib qoldirmasdan, to'liq va imlo xatolarisiz yozing.\n"
+            "3. Rus yoki ingliz tiliga tarjimada tegishli tilning qat'iy adabiy va uslubiy qoidalariga rioya qiling.\n"
+            "4. Asl matnning barcha sarlavhalari, ro'yxat punktlari, paragraflari va Markdown formatini aynan saqlang.\n"
+            "5. Faqat va faqat tarjima natijasini qaytaring. Hech qanday keraksiz kirish yoki xulosa izohlari qo'shmang.\n\n"
+            f"--- TARJIMA QILINADIGAN MATN ---\n{text}"
+        )
+
+        return await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=50.0,
+            operation_name=f"Tarjima ({target_lang})"
+        )
+
+    async def deep_research(self, user_id: int, query: str, lang: str = "uz") -> str:
         """
         Mavzu bo'yicha chuqur tahlil (Deep Research) o'tkazish
         """
+        lang_instruction = (
+            "Hisobotni 100% SOF ADABIY O'ZBEK TILIDA, imlo va grammatika qoidalariga rioya qilib tayyorlang."
+            if lang == "uz" else
+            ("Подготовьте отчет на БЕЗУПРЕЧНОМ РУССКОМ ЯЗЫКЕ, соблюдая все грамматические и стилистические нормы."
+             if lang == "ru" else
+             "Prepare the complete report in FLAWLESS, PROFESSIONAL ENGLISH.")
+        )
         cfg = types.GenerateContentConfig(
-            system_instruction=DEEP_RESEARCH_PROMPT,
+            system_instruction=f"{DEEP_RESEARCH_PROMPT}\n\n{lang_instruction}",
             temperature=0.4
         )
         prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
@@ -334,22 +375,42 @@ class AIService:
             operation_name=f"Deep Research ({query[:30]})"
         )
 
-    async def detect_document_sections(self, doc_text: str, filename: str) -> List[str]:
+    async def detect_document_sections(self, doc_text: str, filename: str, lang: str = "uz") -> List[str]:
         """
-        Hujjatning asosiy bo'limlari, boblari, moddalari yoki mavzularini aniqlash
+        Hujjatning asosiy bo'limlari, boblari, moddalari yoki mavzularini aniqlash (tanlangan tilda)
         """
-        default_sections = [
-            "1. Umumiy qoidalar va asosiy tushunchalar",
-            "2. Huquqlar, majburiyatlar va tartib-taomillar",
-            "3. Moliyaviy shartlar, muddatlar va javobgarlik",
-            "4. Nizolar, bekor qilish va yakuniy qoidalar"
-        ]
+        default_sections = {
+            "uz": [
+                "1. Umumiy qoidalar va asosiy tushunchalar",
+                "2. Huquqlar, majburiyatlar va tartib-taomillar",
+                "3. Moliyaviy shartlar, muddatlar va javobgarlik",
+                "4. Nizolar, bekor qilish va yakuniy qoidalar"
+            ],
+            "ru": [
+                "1. Общие положения и основные понятия",
+                "2. Права, обязанности и процедуры",
+                "3. Финансовые условия, сроки и ответственность",
+                "4. Разрешение споров и заключительные положения"
+            ],
+            "en": [
+                "1. General Provisions & Key Concepts",
+                "2. Rights, Obligations & Procedures",
+                "3. Financial Terms, Deadlines & Liability",
+                "4. Dispute Resolution & Final Clauses"
+            ]
+        }
+
+        lang_request = (
+            "Bo'lim nomlarini o'zbek tilida chiqaring."
+            if lang == "uz" else
+            ("Выведите названия разделов на русском языке." if lang == "ru" else "Output section titles in English.")
+        )
 
         prompt = (
             f"Foydalanuvchi '{filename}' nomli hujjatni yubordi.\n"
-            "Ushbu hujjat matnining asosiy bo'limlari, boblari, moddalar guruhlari yoki asosiy qismlarini aniqlang.\n"
+            f"Ushbu hujjat matnining asosiy bo'limlari, boblari, moddalar guruhlari yoki asosiy qismlarini aniqlang.\n"
+            f"{lang_request}\n"
             "Maksimal 3-5 ta eng muhim va tushunarli bo'lim nomini chiqaring (har bir bo'lim nomi 15-40 belgidan oshmasin).\n"
-            "Misol: '1–21-moddalar: Asosiy qoidalar' yoki '2. Moliyaviy shartlar va hisob-kitob'.\n"
             "Faqat har bir bo'lim nomini alohida qatorda yozing. Hech qanday qo'shimcha so'z, izoh yoki kirish qismi yozmang.\n\n"
             f"--- HUJJAT BOSHI ---\n{doc_text[:18000]}"
         )
@@ -373,7 +434,7 @@ class AIService:
         except Exception as e:
             logger.warning(f"Bo'limlarni aniqlashda ogohlantirish: {e}")
 
-        return default_sections
+        return default_sections.get(lang, default_sections["uz"])
 
     async def analyze_document_section(
         self,
@@ -381,23 +442,61 @@ class AIService:
         doc_text: str,
         filename: str,
         section_name: str,
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        lang: str = "uz"
     ) -> str:
         """
-        Hujjatning tanlangan aniq bo'limi yoki yo'nalishi bo'yicha chuqur, amaliy va to'liq tahlil
+        Hujjatning tanlangan aniq bo'limi bo'yicha chuqur, amaliy va to'liq tahlil.
+        Agar hujjat Rus yoki Ingliz tilida bo'lsa, tanlangan tilga (masalan, O'zbek)
+        to'g'ri, aniq, ravon va grammatik xatolarsiz tarjima qilib beradi.
         """
+        if lang == "ru":
+            lang_directive = (
+                "🔴 ВАЖНОЕ ТРЕБОВАНИЕ К ЯЗЫКУ И ПЕРЕВОДУ:\n"
+                "- Предоставьте анализ на 100% ЧИСТОМ, ЛИТЕРАТУРНОМ И ГРАММАТИЧЕСКИ БЕЗУПРЕЧНОМ РУССКОМ ЯЗЫКЕ.\n"
+                "- Независимо от того, на каком языке составлен исходный документ (узбекский, английский и др.), "
+                "точно и качественно переведите все положения на русский язык.\n"
+                "- Структура анализа:\n"
+                "1. 📌 Основная цель и практическая суть раздела\n"
+                "2. 🔑 Четкие правила, механизмы и пошаговые действия\n"
+                "3. ⏱ Сроки, даты, суммы, лимиты и санкции\n"
+                "4. ⚖️ Права, обязанности сторон и скрытые риски\n"
+                "5. 💡 Практические рекомендации и выводы"
+            )
+        elif lang == "en":
+            lang_directive = (
+                "🔴 CRITICAL LANGUAGE & TRANSLATION REQUIREMENT:\n"
+                "- Provide the entire analysis in FLAWLESS, PROFESSIONAL, AND NATURAL ENGLISH.\n"
+                "- Regardless of the source language (Uzbek, Russian, etc.), accurately translate and interpret all provisions into English.\n"
+                "- Analysis structure:\n"
+                "1. 📌 Core objective and practical meaning of the section\n"
+                "2. 🔑 Concrete rules, mechanisms, and step-by-step actions required\n"
+                "3. ⏱ Dates, strict deadlines, monetary amounts, and penalties\n"
+                "4. ⚖️ Rights, obligations, and hidden liabilities\n"
+                "5. 💡 Actionable advice, safeguards, and conclusions"
+            )
+        else:
+            lang_directive = (
+                "🔴 O'TA MUHIM TIL VA TARJIMA TALABI:\n"
+                "- Tahlilni 100% SOF, ADABIY VA GRAMMATIK JIHATDAN MUKAMMAL O'ZBEK TILIDA bayon qiling.\n"
+                "- Agar hujjat RUS, INGLIZ yoki boshqa tilda bo'lsa, undagi barcha muhim bandlarni, shartlarni, "
+                "qoidalarni va xulosalarni O'ZBEK TILIGA TO'G'RI, ANIQ, RAVON VA GRAMMATIK XATOLARSIZ TARJIMA QILING va amaliy ma'nosini tushuntiring.\n"
+                "- Barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) "
+                "aslo tushirib qoldirmasdan, to'liq va xatosiz yozing.\n"
+                "- Tahlilda quyidagi bloklarni qat'iy yoriting:\n"
+                "1. 📌 Bo'limning asosiy maqsadi va hayotiy mohiyati (tushunarli va ravon tilda)\n"
+                "2. 🔑 Aniq qoidalar, mexanizmlar va qadamma-qadam harakatlar (amaliyotda kim nima qilishi shart)\n"
+                "3. ⏱ Sanalar, qat'iy muddatlar, summalar, chegaralar va sanktsiyalar (aniq raqamlar bilan)\n"
+                "4. ⚖️ Taraflarning huquqlari, majburiyatlari va yashirin xavflar (rad etish, jarima yoki xatoliklar)\n"
+                "5. 💡 Amaliy xulosa va tavsiyalar (foydalanuvchi o'z manfaatini himoya qilish uchun nimalarga e'tibor berishi shart)"
+            )
+
         doc_instruction = (
-            f"Siz yuqori malakali bosh yurist, tahlilchi va amaliy maslahatchisiz.\n"
+            f"Siz yuqori malakali bosh yurist, tahlilchi va professional tarjimonsiz.\n"
             f"Foydalanuvchi '{filename}' nomli rasmiy hujjatni taqdim etdi va aynan quyidagi bo'lim / yo'nalish bo'yicha tahlil so'radi:\n"
             f"🎯 TANLANGAN BO'LIM / YO'NALISH: «{section_name}»\n\n"
-            "Ushbu bo'lim bo'yicha tahlilni o'ta aniq, to'liq, ravon va amaliy ahamiyatini ko'rsatgan holda bayon qiling.\n"
-            "Tahlilda quyidagi bloklarni qat'iy yoriting:\n"
-            "1. 📌 Bo'limning asosiy maqsadi va hayotiy mohiyati (tushunarli va ravon tilda)\n"
-            "2. 🔑 Aniq qoidalar, mexanizmlar va qadamma-qadam harakatlar (amaliyotda kim nima qilishi shart)\n"
-            "3. ⏱ Sanalar, qat'iy muddatlar, summalar, chegaralar va sanktsiyalar (aniq raqamlar bilan)\n"
-            "4. ⚖️ Taraflarning huquqlari, majburiyatlari va yashirin xavflar (rad etish, jarima yoki xatoliklar)\n"
-            "5. 💡 Amaliy xulosa va tavsiyalar (foydalanuvchi o'z manfaatini himoya qilish uchun nimalarga e'tibor berishi shart)\n\n"
-            "Quruq nazariy ro'yxat emas, balki hayotda qo'llash mumkin bo'lgan aniq va to'liq qo'llanma tarzida yozing."
+            f"{lang_directive}\n\n"
+            "Quruq nazariy ro'yxat emas, balki amaliyotda to'liq qo'llanma tarzida yozing."
         )
         if custom_prompt:
             doc_instruction += f"\n\nFoydalanuvchining qo'shimcha aniq savoli/topshirig'i: {custom_prompt}\n"
@@ -410,25 +509,39 @@ class AIService:
             operation_name=f"Hujjat bo'lim tahlili ({filename})"
         )
 
-    async def analyze_document(self, user_id: int, doc_text: str, filename: str, custom_prompt: Optional[str] = None) -> str:
+    async def analyze_document(
+        self,
+        user_id: int,
+        doc_text: str,
+        filename: str,
+        custom_prompt: Optional[str] = None,
+        lang: str = "uz"
+    ) -> str:
         """
         Hujjat (PDF, Word, Excel, TXT) matnini to'liq tahlil qilish
         """
+        sec_title = (
+            "Butun hujjat bo'yicha to'liq va umumiy amaliy tahlil"
+            if lang == "uz" else
+            ("Полный практический анализ всего документа" if lang == "ru" else "Full practical analysis of the entire document")
+        )
         return await self.analyze_document_section(
             user_id=user_id,
             doc_text=doc_text,
             filename=filename,
-            section_name="Butun hujjat bo'yicha to'liq va umumiy amaliy tahlil",
-            custom_prompt=custom_prompt
+            section_name=sec_title,
+            custom_prompt=custom_prompt,
+            lang=lang
         )
 
-    async def refine_content(self, user_id: int, original_text: str, instruction: str) -> str:
+    async def refine_content(self, user_id: int, original_text: str, instruction: str, lang: str = "uz") -> str:
         """
         Mavjud tahlil yoki matnni tahrirlash (kengaytirish, qisqartirish, formatlash)
         """
         prompt = (
-            f"Siz professional matn muharririsiz.\n"
-            f"Quyidagi matnga ushbu topshiriqni bajaring: '{instruction}'.\n\n"
+            f"Siz professional matn muharriri va tahlilchisiz.\n"
+            f"Topshiriq: '{instruction}'.\n"
+            f"Til: {lang}.\n\n"
             f"--- ASL MATN ---\n{original_text}\n\n"
             f"Faqat yangilangan, to'liq va sayqallangan natijani bering."
         )

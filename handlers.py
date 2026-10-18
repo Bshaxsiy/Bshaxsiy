@@ -42,6 +42,19 @@ from document_service import (
 )
 from access_guard import access_guard
 from archive_service import archive_service
+from i18n import (
+    get_user_lang,
+    set_user_lang,
+    has_user_selected_lang,
+    t,
+    btn,
+    get_all_button_variants,
+    get_main_keyboard_i18n,
+    get_section_keyboard_i18n,
+    get_lang_inline_keyboard,
+    get_translator_directions_keyboard,
+    LANGUAGES,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -53,8 +66,11 @@ INSTAGRAM_URL_REGEX = re.compile(
 )
 
 # Foydalanuvchilarning hozirgi faol bo'limi (user_id -> mode)
-# Rejimlar: "NORMAL", "DOC_ANALYSIS", "DEEP_RESEARCH", "MEDIA", "SLIDES", "OFFICE_DOCS", "AI_CHAT"
+# Rejimlar: "NORMAL", "DOC_ANALYSIS", "DEEP_RESEARCH", "MEDIA", "SLIDES", "OFFICE_DOCS", "AI_CHAT", "TRANSLATOR"
 user_active_mode: dict[int, str] = {}
+
+# Foydalanuvchilarning hozirgi tarjima yo'nalishi (user_id -> "auto:uz", "uz:ru" va h.k.)
+user_trans_direction: dict[int, str] = {}
 
 # Format tanlash kutilayotgan audio xabarlar: audio_id -> {user_id, user_name, file_id, mime_type, caption}
 pending_audio: dict[str, dict] = {}
@@ -104,65 +120,32 @@ def store_result(
     return res_id
 
 
-def get_main_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
-    """Asosiy bo'limlar menyusi (🗄 Arxiv va Adminlar uchun Qo'riqchi tugmasi bilan)"""
-    keyboard = [
-        [
-            KeyboardButton(text="📑 Hujjatlar tahlili"),
-            KeyboardButton(text="🔬 Deep Research")
-        ],
-        [
-            KeyboardButton(text="🎬 Musiqa va Video"),
-            KeyboardButton(text="📽 Slaydlar, Prezentatsiya")
-        ],
-        [
-            KeyboardButton(text="📊 PDF, WORD, EXCEL"),
-            KeyboardButton(text="🤖 AI Chat")
-        ],
-        [
-            KeyboardButton(text="🗄 Arxiv")
-        ]
-    ]
-    if is_admin:
-        keyboard.append([
-            KeyboardButton(text="🛡 Qo'riqchi (Admin)"),
-            KeyboardButton(text="ℹ️ Yordam")
-        ])
-    else:
-        keyboard.append([
-            KeyboardButton(text="ℹ️ Yordam"),
-            KeyboardButton(text="🏠 Bosh menyu")
-        ])
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+def get_main_keyboard(is_admin: bool = False, lang: str = "uz") -> ReplyKeyboardMarkup:
+    """Asosiy bo'limlar menyusi (Tanlangan til va Qo'riqchi tugmasi bilan)"""
+    return get_main_keyboard_i18n(lang=lang, is_admin=is_admin)
 
 
-def get_section_keyboard() -> ReplyKeyboardMarkup:
-    """Bo'lim ichidagi qulay boshqaruv menyusi"""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="🔄 Yangi so'rov"),
-                KeyboardButton(text="🏠 Bosh menyu")
-            ]
-        ],
-        resize_keyboard=True
-    )
+def get_section_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
+    """Bo'lim ichidagi qulay boshqaruv menyusi (Tanlangan tilda)"""
+    return get_section_keyboard_i18n(lang=lang)
 
 
-def get_content_actions_keyboard(res_id: str) -> InlineKeyboardMarkup:
+def get_content_actions_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Har bir natija tagida bo'limga o'tkazish va tahrirlash tugmalari"""
+    tr_label = "📂 Bo'limga o'tkazish" if lang == "uz" else ("📂 В другие форматы" if lang == "ru" else "📂 Transfer")
+    ed_label = "✏️ Tahrirlash" if lang == "uz" else ("✏️ Редактировать" if lang == "ru" else "✏️ Edit")
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{res_id}"),
-                InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{res_id}")
+                InlineKeyboardButton(text=tr_label, callback_data=f"act:tr:{res_id}"),
+                InlineKeyboardButton(text=ed_label, callback_data=f"act:ed:{res_id}")
             ]
         ]
     )
 
 
-def get_document_sections_keyboard(doc_id: str, sections: list) -> InlineKeyboardMarkup:
-    """Hujjat yuklanganda qaysi bo'limni tahlil qilishni tanlash klaviaturasi"""
+def get_document_sections_keyboard(doc_id: str, sections: list, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Hujjat yuklanganda qaysi bo'limni tahlil qilishni tanlash klaviaturasi (tanlangan tilda)"""
     kb = []
     # Aniqlangan asosiy bo'limlar (har biri alohida qatorda)
     for idx, sec in enumerate(sections[:5]):
@@ -171,42 +154,63 @@ def get_document_sections_keyboard(doc_id: str, sections: list) -> InlineKeyboar
             InlineKeyboardButton(text=f"📌 {clean_name}", callback_data=f"doc_sec:{doc_id}:{idx}")
         ])
 
-    # Standart umumiy va tahliliy yo'nalishlar
+    all_label = (
+        "🌐 Barcha bo'limlar (To'liq tahlil)" if lang == "uz" else
+        ("🌐 Все разделы (Полный анализ)" if lang == "ru" else "🌐 All Sections (Full Analysis)")
+    )
+    risks_label = (
+        "⚖️ Huquqlar va amaliy xavflar" if lang == "uz" else
+        ("⚖️ Права и скрытые риски" if lang == "ru" else "⚖️ Rights & Hidden Risks")
+    )
+    deadlines_label = (
+        "⏱ Muddatlar va jarimalar" if lang == "uz" else
+        ("⏱ Сроки и санкции" if lang == "ru" else "⏱ Deadlines & Penalties")
+    )
+    custom_label = (
+        "✍️ O'z savolim / Boshqa bo'lim" if lang == "uz" else
+        ("✍️ Свой вопрос / Раздел" if lang == "ru" else "✍️ Custom Query / Other Section")
+    )
+    cancel_label = (
+        "❌ Bekor qilish" if lang == "uz" else ("❌ Отмена" if lang == "ru" else "❌ Cancel")
+    )
+
+    kb.append([InlineKeyboardButton(text=all_label, callback_data=f"doc_sec:{doc_id}:all")])
     kb.append([
-        InlineKeyboardButton(text="🌐 Barcha bo'limlar (To'liq tahlil)", callback_data=f"doc_sec:{doc_id}:all")
+        InlineKeyboardButton(text=risks_label, callback_data=f"doc_sec:{doc_id}:risks"),
+        InlineKeyboardButton(text=deadlines_label, callback_data=f"doc_sec:{doc_id}:deadlines")
     ])
-    kb.append([
-        InlineKeyboardButton(text="⚖️ Huquqlar va amaliy xavflar", callback_data=f"doc_sec:{doc_id}:risks"),
-        InlineKeyboardButton(text="⏱ Muddatlar va jarimalar", callback_data=f"doc_sec:{doc_id}:deadlines")
-    ])
-    kb.append([
-        InlineKeyboardButton(text="✍️ O'z savolim / Boshqa bo'limni yozish", callback_data=f"doc_sec:{doc_id}:custom")
-    ])
-    kb.append([
-        InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"doc_sec:{doc_id}:cancel")
-    ])
+    kb.append([InlineKeyboardButton(text=custom_label, callback_data=f"doc_sec:{doc_id}:custom")])
+    kb.append([InlineKeyboardButton(text=cancel_label, callback_data=f"doc_sec:{doc_id}:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
-def get_document_result_keyboard(res_id: str, doc_id: str = "", current_sec_idx: Optional[int] = None, has_next: bool = False) -> InlineKeyboardMarkup:
+def get_document_result_keyboard(res_id: str, doc_id: str = "", current_sec_idx: Optional[int] = None, has_next: bool = False, lang: str = "uz") -> InlineKeyboardMarkup:
     """Hujjat tahlili natijasi tagidagi tugmalar: formatlar, keyingi bo'lim va qayta tanlash"""
+    tr_label = "📂 Bo'limga o'tkazish" if lang == "uz" else ("📂 В другие форматы" if lang == "ru" else "📂 Transfer")
+    ed_label = "✏️ Tahrirlash" if lang == "uz" else ("✏️ Редактировать" if lang == "ru" else "✏️ Edit")
     kb = [
         [
-            InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{res_id}"),
-            InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{res_id}")
+            InlineKeyboardButton(text=tr_label, callback_data=f"act:tr:{res_id}"),
+            InlineKeyboardButton(text=ed_label, callback_data=f"act:ed:{res_id}")
         ]
     ]
     if doc_id:
         nav_row = []
         if has_next and current_sec_idx is not None:
-            nav_row.append(InlineKeyboardButton(text="⏩ Keyingi bo'limni tahlil qilish", callback_data=f"doc_sec:{doc_id}:next:{current_sec_idx + 1}"))
-        nav_row.append(InlineKeyboardButton(text="📑 Boshqa bo'lim tanlash", callback_data=f"doc_sec:{doc_id}:menu"))
+            next_label = "⏩ Keyingi bo'lim" if lang == "uz" else ("⏩ Следующий раздел" if lang == "ru" else "⏩ Next Section")
+            nav_row.append(InlineKeyboardButton(text=next_label, callback_data=f"doc_sec:{doc_id}:next:{current_sec_idx + 1}"))
+        other_label = "📑 Boshqa bo'lim" if lang == "uz" else ("📑 Другой раздел" if lang == "ru" else "📑 Other Section")
+        nav_row.append(InlineKeyboardButton(text=other_label, callback_data=f"doc_sec:{doc_id}:menu"))
         kb.append(nav_row)
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
-def get_transfer_keyboard(res_id: str) -> InlineKeyboardMarkup:
+def get_transfer_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Natijani tegishli bo'limlarga o'tkazish tanlovlari"""
+    voice_label = "🎙 Ovozli qilish (TTS)" if lang == "uz" else ("🎙 Озвучить (TTS)" if lang == "ru" else "🎙 Voice (TTS)")
+    trans_label = "🌐 Boshqa tilga tarjima" if lang == "uz" else ("🌐 Перевести на другой язык" if lang == "ru" else "🌐 Translate")
+    back_label = "🔙 Orqaga" if lang == "uz" else ("🔙 Назад" if lang == "ru" else "🔙 Back")
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -219,29 +223,36 @@ def get_transfer_keyboard(res_id: str) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🔬 Deep Research", callback_data=f"tr:deep:{res_id}"),
-                InlineKeyboardButton(text="🎙 Ovozli qilish (TTS)", callback_data=f"tr:voice:{res_id}")
+                InlineKeyboardButton(text=voice_label, callback_data=f"tr:voice:{res_id}")
             ],
             [
-                InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"act:back:{res_id}")
+                InlineKeyboardButton(text=trans_label, callback_data=f"tr:trans:{res_id}"),
+                InlineKeyboardButton(text=back_label, callback_data=f"act:back:{res_id}")
             ]
         ]
     )
 
 
-def get_edit_keyboard(res_id: str) -> InlineKeyboardMarkup:
+def get_edit_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Natijani tahrirlash va qayta ishlash tanlovlari"""
+    exp_label = "➕ Kengaytirish" if lang == "uz" else ("➕ Расширить" if lang == "ru" else "➕ Expand")
+    sum_label = "✂️ Qisqartirish" if lang == "uz" else ("✂️ Сократить" if lang == "ru" else "✂️ Summarize")
+    rew_label = "🔄 Qayta yozish" if lang == "uz" else ("🔄 Переписать" if lang == "ru" else "🔄 Rewrite")
+    tr_label = "🌐 Tarjima qilish" if lang == "uz" else ("🌐 Перевести" if lang == "ru" else "🌐 Translate")
+    back_label = "🔙 Orqaga" if lang == "uz" else ("🔙 Назад" if lang == "ru" else "🔙 Back")
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="➕ Kengaytirish", callback_data=f"ed:expand:{res_id}"),
-                InlineKeyboardButton(text="✂️ Qisqartirish", callback_data=f"ed:summary:{res_id}")
+                InlineKeyboardButton(text=exp_label, callback_data=f"ed:expand:{res_id}"),
+                InlineKeyboardButton(text=sum_label, callback_data=f"ed:summary:{res_id}")
             ],
             [
-                InlineKeyboardButton(text="🔄 Qayta yozish", callback_data=f"ed:rewrite:{res_id}"),
-                InlineKeyboardButton(text="🇺🇿 O'zbekchaga o'girish", callback_data=f"ed:truz:{res_id}")
+                InlineKeyboardButton(text=rew_label, callback_data=f"ed:rewrite:{res_id}"),
+                InlineKeyboardButton(text=tr_label, callback_data=f"tr:trans:{res_id}")
             ],
             [
-                InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"act:back:{res_id}")
+                InlineKeyboardButton(text=back_label, callback_data=f"act:back:{res_id}")
             ]
         ]
     )
@@ -294,7 +305,8 @@ def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page
         "image": "📸",
         "slides": "📽",
         "office": "📊",
-        "chat": "🤖"
+        "chat": "🤖",
+        "trans": "🌐"
     }
 
     for item in items:
@@ -406,14 +418,19 @@ async def send_ai_response(
     message: Message,
     response_text: str,
     res_id: Optional[str] = None,
-    reply_markup: Optional[InlineKeyboardMarkup] = None
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    lang: Optional[str] = None
 ):
     """Javobni xavfsiz formatda va harakat tugmalari bilan jo'natish"""
     if not response_text:
         await message.reply("Javob bo'sh qaytdi.")
         return
 
-    markup = reply_markup if reply_markup else (get_content_actions_keyboard(res_id) if res_id else None)
+    if lang is None:
+        u_id = message.from_user.id if message.from_user else 0
+        lang = get_user_lang(u_id) if u_id else "uz"
+
+    markup = reply_markup if reply_markup else (get_content_actions_keyboard(res_id, lang=lang) if res_id else None)
     max_len = 4000
     chunks = [response_text[i:i + max_len] for i in range(0, len(response_text), max_len)]
 
@@ -433,141 +450,249 @@ async def send_ai_response(
 # ASOSIY BUYRUQLAR VA BO'LIMLARGA O'TISH
 # =====================================================================
 
+# =====================================================================
+# ASOSIY BUYRUQLAR VA BO'LIMLARGA O'TISH (MULTILINGUAL)
+# =====================================================================
+
 @router.message(CommandStart())
-@router.message(F.text == "🏠 Bosh menyu")
 async def handle_start(message: Message):
-    """Bosh menyu"""
+    """Bosh menyu yoki til tanlash"""
     user_id = message.from_user.id
     user_active_mode[user_id] = "NORMAL"
     user_name = message.from_user.first_name if message.from_user else "Foydalanuvchi"
+    is_admin = access_guard.is_admin(user_id)
+
+    # Agar foydalanuvchi hali til tanlamagan bo'lsa -> avval til tanlash menyusi
+    if not has_user_selected_lang(user_id):
+        await message.answer(
+            t("choose_language", "uz"),
+            parse_mode="HTML",
+            reply_markup=get_lang_inline_keyboard()
+        )
+        return
+
+    lang = get_user_lang(user_id)
+    admin_badge = "\n👑 <b>Siz bot administratorsiz (Qo'riqchi faol).</b>\n" if is_admin and lang == "uz" else (
+        "\n👑 <b>Вы администратор бота.</b>\n" if is_admin and lang == "ru" else (
+            "\n👑 <b>You are a bot administrator.</b>\n" if is_admin else ""
+        )
+    )
+    welcome_text = t("welcome", lang, name=user_name, admin_badge=admin_badge)
+    await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin, lang=lang))
+
+
+@router.callback_query(F.data.startswith("set_lang:"))
+async def handle_set_language_callback(callback: CallbackQuery):
+    """Foydalanuvchi tilini saqlash va bosh menyuni chiqarish"""
+    user_id = callback.from_user.id
+    new_lang = callback.data.split(":", 1)[1]
+    set_user_lang(user_id, new_lang)
+    await callback.answer()
 
     is_admin = access_guard.is_admin(user_id)
-    admin_badge = "\n👑 <b>Siz bot administratorsiz (Qo'riqchi faol).</b>\n" if is_admin else ""
-
-    welcome_text = (
-        f"👋 Assalomu alaykum, <b>{user_name}</b>!{admin_badge}\n\n"
-        "🌟 <b>Ko'p funksiyali Intellektual Bot</b>ga xush kelibsiz!\n\n"
-        "<b>Botning asosiy bo'limlari:</b>\n"
-        "1. 📑 <b>Hujjatlar tahlili:</b> PDF, Word, Excel, TXT fayllarni chuqur o'rganish va hisobot olish.\n"
-        "2. 🔬 <b>Deep Research:</b> Istalgan mavzuda to'liq ilmiy va tahliliy izlanish hisoboti.\n"
-        "3. 🎬 <b>Musiqa va Video:</b> Instagram/video yuklash, dumaloq video (krujok) va MP3 ajratish.\n"
-        "4. 📽 <b>Slaydlar, Prezentatsiya:</b> Mavzudan professional PowerPoint (<code>.pptx</code>) taqdimot yaratish.\n"
-        "5. 📊 <b>PDF, WORD, EXCEL:</b> Hujjatlarni generatsiya qilish va jadvallar tuzish.\n"
-        "6. 🤖 <b>AI Chat:</b> Erkin muloqot va maslahatlar.\n"
-        "7. 🗄 <b>Arxiv:</b> Barcha so'rovlar va yaratilgan hujjatlar tarixi, ularni ko'rish, yuklab olish va o'chirish.\n\n"
-        "💡 <i>Har qanday tahlil natijasini boshqa bo'limlarga o'tkazishingiz yoki tahrirlashingiz mumkin!</i>\n\n"
-        "👇 <i>Kerakli bo'limni tanlang:</i>"
+    admin_badge = "\n👑 <b>Siz bot administratorsiz.</b>\n" if is_admin and new_lang == "uz" else (
+        "\n👑 <b>Вы администратор бота.</b>\n" if is_admin and new_lang == "ru" else (
+            "\n👑 <b>You are a bot administrator.</b>\n" if is_admin else ""
+        )
     )
-    await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin))
+    user_name = callback.from_user.first_name or "Foydalanuvchi"
+
+    await callback.message.answer(
+        t("lang_changed", new_lang),
+        parse_mode="HTML"
+    )
+    welcome_text = t("welcome", new_lang, name=user_name, admin_badge=admin_badge)
+    await callback.message.answer(
+        welcome_text,
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard(is_admin=is_admin, lang=new_lang)
+    )
 
 
-@router.message(F.text == "ℹ️ Yordam")
+@router.message(Command("lang"))
+@router.message(Command("language"))
+@router.message(F.text.in_(get_all_button_variants("btn_lang")))
+async def handle_change_language_cmd(message: Message):
+    """Tilni o'zgartirish menyusi"""
+    user_id = message.from_user.id
+    lang = get_user_lang(user_id)
+    await message.answer(
+        t("choose_language", lang),
+        parse_mode="HTML",
+        reply_markup=get_lang_inline_keyboard()
+    )
+
+
+@router.message(F.text.in_(get_all_button_variants("btn_main_menu")))
+async def handle_back_to_main_menu(message: Message):
+    """Bosh menyuga qaytish"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "NORMAL"
+    lang = get_user_lang(user_id)
+    is_admin = access_guard.is_admin(user_id)
+    user_name = message.from_user.first_name if message.from_user else "Foydalanuvchi"
+    admin_badge = "\n👑 <b>Siz bot administratorsiz.</b>\n" if is_admin and lang == "uz" else (
+        "\n👑 <b>Вы администратор бота.</b>\n" if is_admin and lang == "ru" else (
+            "\n👑 <b>You are a bot administrator.</b>\n" if is_admin else ""
+        )
+    )
+    welcome_text = t("welcome", lang, name=user_name, admin_badge=admin_badge)
+    await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin, lang=lang))
+
+
+@router.message(F.text.in_(get_all_button_variants("btn_help")))
 @router.message(Command("help"))
 async def handle_help(message: Message):
-    """Qo'llanma"""
-    help_text = (
-        "📖 <b>Bot bo'limlaridan foydalanish qo'llanmasi:</b>\n\n"
-        "📑 <b>1. Hujjatlar tahlili:</b>\n"
-        "PDF, Word (.docx), Excel (.xlsx) yoki matnli fayl jo'nating. AI barcha muhim bandlarni, sanalar va raqamlarni tahlil qilib beradi.\n\n"
-        "🔬 <b>2. Deep Research (Chuqur Izlanish):</b>\n"
-        "Istalgan savol yoki mavzuni yuboring. AI keng qamrovli tahlil, statistika va strategik yechimlardan iborat to'liq hisobot tuzadi.\n\n"
-        "🎬 <b>3. Musiqa va Video:</b>\n"
-        "• Instagram havolasini yuboring -> videoni yuklab beradi.\n"
-        "• Video yuboring -> dumaloq (Video Note) yoki MP3 audio qilib beradi.\n\n"
-        "📽 <b>4. Slaydlar, Prezentatsiya:</b>\n"
-        "Mavzu yoki matn yuboring -> bot tayyor <code>.pptx</code> PowerPoint taqdimotini yaratib beradi.\n\n"
-        "📊 <b>5. PDF, WORD, EXCEL:</b>\n"
-        "Matn yuborib uni chiroyli formatlangan Word, PDF yoki Excel jadvali sifatida yuklab oling.\n\n"
-        "🗄 <b>6. Arxiv va Tarix:</b>\n"
-        "Botda qilgan barcha so'rovlaringiz va tahlillaringiz arxivingizda saqlanadi. Ularni istalgan payt ko'rish, qayta yuklab olish yoki keraksizlarini o'chirish mumkin.\n\n"
-        "🔁 <b>O'tkazish va Tahrirlash:</b>\n"
-        "Har bir natija ostidagi <b>«📂 Bo'limga o'tkazish»</b> tugmasi orqali hisobotni boshqa formatga o'tkazishingiz, <b>«✏️ Tahrirlash»</b> orqali kengaytirishingiz mumkin!"
-    )
-    await message.answer(help_text, parse_mode="HTML")
+    """Qo'llanma (tanlangan tilda)"""
+    lang = get_user_lang(message.from_user.id)
+    await message.answer(t("help", lang), parse_mode="HTML")
 
 
-@router.message(F.text == "📑 Hujjatlar tahlili")
+@router.message(F.text.in_(get_all_button_variants("btn_doc_analysis")))
 async def nav_doc_analysis(message: Message):
-    user_active_mode[message.from_user.id] = "DOC_ANALYSIS"
+    """Hujjatlar tahlili bo'limi"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "DOC_ANALYSIS"
+    lang = get_user_lang(user_id)
     await message.answer(
-        "📑 <b>Hujjatlar tahlili bo'limi</b>\n\n"
-        "Menga istalgan <b>PDF, Word (.docx), Excel (.xlsx)</b> yoki <b>matnli fayl</b> jo'nating.\n\n"
-        "AI hujjatni diqqat bilan o'rganib:\n"
-        "• Asosiy maqsad va qisqacha mazmunini\n"
-        "• Eng muhim shartlar va qoidalarni\n"
-        "• Sanalar, summalar va majburiyatlarni\n"
-        "• Tavsiyalar va xulosalarni chiqarib beradi.\n\n"
-        "📤 <i>Hujjatni fayl shaklida yuborishingiz mumkin:</i>",
+        t("doc_analysis_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "🔬 Deep Research")
+@router.message(F.text.in_(get_all_button_variants("btn_translator")))
+@router.message(Command("translate"))
+@router.message(Command("translator"))
+async def nav_translator(message: Message):
+    """🌐 Tarjimon bo'limi"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "TRANSLATOR"
+    lang = get_user_lang(user_id)
+    active_dir = user_trans_direction.get(user_id, f"auto:{lang}")
+
+    dir_labels = {
+        "auto:uz": "🔄 Avto ➡️ 🇺🇿 O'zbekcha",
+        "auto:ru": "🔄 Авто ➡️ 🇷🇺 Русский",
+        "auto:en": "🔄 Auto ➡️ 🇬🇧 English",
+        "uz:ru": "🇺🇿 O'zbek ➡️ 🇷🇺 Rus",
+        "ru:uz": "🇷🇺 Rus ➡️ 🇺🇿 O'zbek",
+        "uz:en": "🇺🇿 O'zbek ➡️ 🇬🇧 Ingliz",
+        "en:uz": "🇬🇧 Ingliz ➡️ 🇺🇿 O'zbek",
+        "ru:en": "🇷🇺 Rus ➡️ 🇬🇧 Ingliz",
+        "en:ru": "🇬🇧 Ingliz ➡️ 🇷🇺 Rus"
+    }
+    dir_name = dir_labels.get(active_dir, active_dir)
+
+    await message.answer(
+        t("translator_menu", lang, direction=dir_name),
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard(lang=lang)
+    )
+    direction_prompt = (
+        "👇 <b>Tarjima yo'nalishini tanlang:</b>" if lang == "uz" else
+        ("👇 <b>Выберите направление перевода:</b>" if lang == "ru" else "👇 <b>Select translation direction:</b>")
+    )
+    await message.answer(
+        direction_prompt,
+        parse_mode="HTML",
+        reply_markup=get_translator_directions_keyboard(lang=lang, active_dir=active_dir)
+    )
+
+
+@router.callback_query(F.data.startswith("tr_dir:"))
+async def handle_trans_direction_callback(callback: CallbackQuery):
+    """Tarjima yo'nalishini o'zgartirish callbacki"""
+    user_id = callback.from_user.id
+    direction_code = callback.data.split(":", 1)[1]
+    user_trans_direction[user_id] = direction_code
+    lang = get_user_lang(user_id)
+
+    dir_labels = {
+        "auto:uz": "🔄 Avto ➡️ 🇺🇿 O'zbekcha",
+        "auto:ru": "🔄 Авто ➡️ 🇷🇺 Русский",
+        "auto:en": "🔄 Auto ➡️ 🇬🇧 English",
+        "uz:ru": "🇺🇿 O'zbek ➡️ 🇷🇺 Rus",
+        "ru:uz": "🇷🇺 Rus ➡️ 🇺🇿 O'zbek",
+        "uz:en": "🇺🇿 O'zbek ➡️ 🇬🇧 Ingliz",
+        "en:uz": "🇬🇧 Ingliz ➡️ 🇺🇿 O'zbek",
+        "ru:en": "🇷🇺 Rus ➡️ 🇬🇧 Ingliz",
+        "en:ru": "🇬🇧 Ingliz ➡️ 🇷🇺 Rus"
+    }
+    dir_name = dir_labels.get(direction_code, direction_code)
+    await callback.answer(f"Tanlandi: {dir_name}")
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=get_translator_directions_keyboard(lang=lang, active_dir=direction_code)
+        )
+    except Exception:
+        pass
+
+    confirm_txt = (
+        f"✅ <b>Tarjima yo'nalishi belgilandi:</b> {dir_name}\n\n"
+        f"Endi tarjima qilmoqchi bo'lgan matn, xabar yoki hujjatni yuboring:"
+        if lang == "uz" else
+        (f"✅ <b>Направление перевода установлено:</b> {dir_name}\n\nОтправьте текст или документ для перевода:"
+         if lang == "ru" else
+         f"✅ <b>Translation direction set:</b> {dir_name}\n\nSend the text or document to translate:")
+    )
+    await callback.message.answer(confirm_txt, parse_mode="HTML")
+
+
+@router.message(F.text.in_(get_all_button_variants("btn_deep_research")))
 async def nav_deep_research(message: Message):
-    user_active_mode[message.from_user.id] = "DEEP_RESEARCH"
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "DEEP_RESEARCH"
+    lang = get_user_lang(user_id)
     await message.answer(
-        "🔬 <b>Deep Research (Chuqur Izlanish) bo'limi</b>\n\n"
-        "O'zingizni qiziqtirgan istalgan mavzu, soha, loyiha, tahliliy savol yoki biznes g'oyani yozing.\n\n"
-        "AI quyidagi tuzilishda to'liq professional hisobot tayyorlaydi:\n"
-        "1. 📌 Kirish va Mavzuning Dolzarbligi\n"
-        "2. 🔍 Chuqur Tahlil va Mexanizmlar\n"
-        "3. 📊 Asosiy Ko'rsatkichlar va Statistika\n"
-        "4. ⚠️ Xatarlar va Muammolar\n"
-        "5. 💡 Strategik Yechimlar va Tavsiyalar\n\n"
-        "✍️ <i>Tadqiqot mavzusini yozib qoldiring:</i>",
+        t("deep_research_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "🎬 Musiqa va Video")
+@router.message(F.text.in_(get_all_button_variants("btn_media")))
 async def nav_media(message: Message):
-    user_active_mode[message.from_user.id] = "MEDIA"
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "MEDIA"
+    lang = get_user_lang(user_id)
     await message.answer(
-        "🎬 <b>Musiqa va Video bo'limi</b>\n\n"
-        "• 📥 <b>Instagram video:</b> Reels yoki video post havolasini yuboring.\n"
-        "• 🔘 <b>Dumaloq video (krujok):</b> Telefoningizdagi videoni yuboring.\n"
-        "• 🎵 <b>MP3 ajratish:</b> Istalgan videoni yuboring va uning audiosini MP3 qilib oling.\n\n"
-        "Havola yoki video yuboring:",
+        t("media_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "📽 Slaydlar, Prezentatsiya")
+@router.message(F.text.in_(get_all_button_variants("btn_slides")))
 async def nav_slides(message: Message):
-    user_active_mode[message.from_user.id] = "SLIDES"
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "SLIDES"
+    lang = get_user_lang(user_id)
     await message.answer(
-        "📽 <b>Slaydlar va Prezentatsiya bo'limi</b>\n\n"
-        "Mavzu, reja yoki tayyor matnni yozib qoldiring.\n\n"
-        "AI uni to'liq PowerPoint (<code>.pptx</code>) taqdimotiga aylantirib, chiroyli titul va mazmunli slaydlari bilan tayyor fayl shaklida yuboradi!\n\n"
-        "✍️ <i>Prezentatsiya mavzusini yuboring:</i>",
+        t("slides_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "📊 PDF, WORD, EXCEL")
+@router.message(F.text.in_(get_all_button_variants("btn_docs")))
 async def nav_office_docs(message: Message):
-    user_active_mode[message.from_user.id] = "OFFICE_DOCS"
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "OFFICE_DOCS"
+    lang = get_user_lang(user_id)
     await message.answer(
-        "📊 <b>PDF, WORD, EXCEL Generator bo'limi</b>\n\n"
-        "Istalgan ma'lumot, matn, hisobot yoki jadval g'oyasini yozing.\n"
-        "Biz uni:\n"
-        "• 📄 <b>Word (.docx)</b>\n"
-        "• 📑 <b>PDF (.pdf)</b>\n"
-        "• 📊 <b>Excel (.xlsx)</b> jadvaliga aylantirib beramiz!\n\n"
-        "✍️ <i>Hujjat yaratmoqchi bo'lgan matningizni yuboring:</i>",
+        t("office_docs_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "🤖 AI Chat")
+@router.message(F.text.in_(get_all_button_variants("btn_ai_chat")))
 @router.message(Command("ai"))
 async def nav_ai_chat(message: Message):
-    user_active_mode[message.from_user.id] = "AI_CHAT"
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "AI_CHAT"
+    lang = get_user_lang(user_id)
     text = message.text or ""
 
     if text.startswith("/ai"):
@@ -592,30 +717,31 @@ async def nav_ai_chat(message: Message):
             return
 
     await message.answer(
-        "🤖 <b>Gemini AI Chat faollashtirildi!</b>\n\n"
-        "Istalgan savol berishingiz, suhbatlashishingiz yoki rasm yuborishingiz mumkin. "
-        "Muloqot xotirada saqlanadi.\n\n"
-        "• 🔄 Suhbatni tozalash: <code>/clear</code>\n"
-        "• 🏠 Bosh menyu: quyidagi tugma",
+        t("ai_chat_menu", lang),
         parse_mode="HTML",
-        reply_markup=get_section_keyboard()
+        reply_markup=get_section_keyboard(lang=lang)
     )
 
 
-@router.message(F.text == "🗄 Arxiv")
+@router.message(F.text.in_(get_all_button_variants("btn_archive")))
 @router.message(Command("arxiv"))
 @router.message(Command("archive"))
 async def nav_archive(message: Message):
     """🗄 Arxiv bo'limi - barcha saqlangan so'rovlarni ko'rish va boshqarish"""
     user_id = message.from_user.id
     total_count = archive_service.get_user_count(user_id)
+    lang = get_user_lang(user_id)
 
     if total_count == 0:
         empty_msg = (
             "🗄 <b>Sizning arxivingiz hozircha bo'sh.</b>\n\n"
-            "Botdan foydalanib savollar berganingizda, hujjatlar tahlil qilganingizda yoki taqdimotlar "
-            "yaratganingizda, barcha so'rovlar va tayyor natijalar avtomatik ravishda shu yerda saqlanadi.\n\n"
+            "Botdan foydalanib so'rovlar yuborganingizda, tarjimalar yoki hujjatlar tahlil qilganingizda, "
+            "barcha natijalar avtomatik ravishda shu yerda saqlanadi.\n\n"
             "Keyinchalik ularni istalgan vaqtda qayta ko'rishingiz, yuklab olishingiz yoki o'chirib tashlashingiz mumkin."
+            if lang == "uz" else
+            ("🗄 <b>Ваш архив пока пуст.</b>\n\nВсе ваши запросы, переводы и отчеты будут автоматически сохраняться здесь."
+             if lang == "ru" else
+             "🗄 <b>Your archive is currently empty.</b>\n\nAll your queries, translations, and reports will be saved here automatically.")
         )
         await message.answer(empty_msg, parse_mode="HTML")
         return
@@ -626,6 +752,10 @@ async def nav_archive(message: Message):
         f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
         f"👇 <i>Kerakli so'rovni tanlang: uni qayta o'qishingiz, Word/PDF/Excel/Audio formatda yuklab olishingiz "
         f"yoki keraksiz bo'lsa o'chirib tashlashingiz mumkin:</i>"
+        if lang == "uz" else
+        (f"🗄 <b>Ваш архив запросов</b>\n📊 <b>Всего записей:</b> {total_count}\n\n👇 <i>Выберите запись для чтения, скачивания или удаления:</i>"
+         if lang == "ru" else
+         f"🗄 <b>Your Query Archive</b>\n📊 <b>Total items:</b> {total_count}\n\n👇 <i>Select an item to read, export, or delete:</i>")
     )
     await message.answer(
         text,
@@ -634,15 +764,20 @@ async def nav_archive(message: Message):
     )
 
 
-@router.message(F.text == "🔄 Yangi so'rov")
+@router.message(F.text.in_(get_all_button_variants("btn_new_request")))
 @router.message(Command("clear"))
 async def handle_clear_command(message: Message):
     user_id = message.from_user.id
     ai_service.reset_chat(user_id)
-    await message.answer(
-        "🧹 <b>Suhbat va so'rovlar tozalandi!</b>\n\nYangi so'rovingizni yuborishingiz mumkin.",
-        parse_mode="HTML"
+    lang = get_user_lang(user_id)
+    clear_msg = (
+        "🧹 <b>Suhbat va so'rovlar tozalandi!</b>\n\nYangi so'rovingizni yuborishingiz mumkin."
+        if lang == "uz" else
+        ("🧹 <b>История диалога очищена!</b>\n\nМожете отправить новый запрос."
+         if lang == "ru" else
+         "🧹 <b>Conversation cleared!</b>\n\nYou can now send a new query.")
     )
+    await message.answer(clear_msg, parse_mode="HTML")
 
 
 @router.message(Command("setkey"))
@@ -665,14 +800,22 @@ async def handle_setkey(message: Message):
 async def handle_document_upload(message: Message):
     """
     Foydalanuvchi hujjat (PDF, Word, Excel, TXT va h.k.) yuborganida:
-    Uni yuklab olib, bo'limlarini aniqlash va qaysi bo'limni tahlil qilishni so'rash!
+    - Agar TRANSLATOR rejimida bo'lsa: fayl matnini belgilangan yo'nalish bo'yicha to'liq tarjima qilish!
+    - Agar boshqa rejimda bo'lsa: Uni yuklab olib, bo'limlarini aniqlash va qaysi bo'limni tahlil qilishni so'rash!
     """
     user_id = message.from_user.id
+    current_mode = user_active_mode.get(user_id, "NORMAL")
+    lang = get_user_lang(user_id)
     doc = message.document
     filename = doc.file_name or "hujjat.pdf"
     caption = message.caption or ""
 
-    status_msg = await message.reply(f"⏳ <i>«{filename}» qabul qilinmoqda va tahlil uchun tayyorlanmoqda...</i>", parse_mode="HTML")
+    status_msg = await message.reply(
+        f"⏳ <i>«{filename}» qabul qilinmoqda va tayyorlanmoqda...</i>" if lang == "uz" else
+        (f"⏳ <i>«{filename}» принимается и обрабатывается...</i>" if lang == "ru" else
+         f"⏳ <i>Receiving and processing «{filename}»...</i>"),
+        parse_mode="HTML"
+    )
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     unique_id = uuid.uuid4().hex[:8]
@@ -686,12 +829,49 @@ async def handle_document_upload(message: Message):
         # Matnni ajratib olish
         extracted_text = extract_text_from_file(str(temp_path), filename)
         if not extracted_text or len(extracted_text) < 10:
-            await status_msg.edit_text("❌ Ushbu hujjatdan matn ajratib olib bo'lmadi yoki fayl bo'sh.", parse_mode="HTML")
+            err_msg = (
+                "❌ Ushbu hujjatdan matn ajratib olib bo'lmadi yoki fayl bo'sh." if lang == "uz" else
+                ("❌ Не удалось извлечь текст из документа или файл пуст." if lang == "ru" else
+                 "❌ Could not extract text from document or file is empty.")
+            )
+            await status_msg.edit_text(err_msg, parse_mode="HTML")
             return
 
-        # Bo'limlarni aniqlash
+        # 1. TRANSLATOR rejimida hujjat yuborilgan bo'lsa
+        if current_mode == "TRANSLATOR":
+            dir_code = user_trans_direction.get(user_id, f"auto:{lang}")
+            if ":" in dir_code:
+                src, tgt = dir_code.split(":", 1)
+            else:
+                src, tgt = "auto", lang
+
+            await status_msg.edit_text(
+                f"🌐 <i>«{filename}» hujjati tarjima qilinmoqda, iltimos kuting...</i>" if lang == "uz" else
+                (f"🌐 <i>Перевод документа «{filename}», пожалуйста подождите...</i>" if lang == "ru" else
+                 f"🌐 <i>Translating document «{filename}», please wait...</i>"),
+                parse_mode="HTML"
+            )
+            translated = await ai_service.translate_text(
+                text=extracted_text,
+                target_lang=tgt,
+                source_lang=src
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+            target_lang_names = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
+            tgt_name = target_lang_names.get(tgt, tgt)
+            title = f"Tarjima ({tgt_name}): {filename}"
+            user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
+            res_id = store_result(title=title, content=translated, user_name=user_name, user_id=user_id, category="trans")
+            await send_ai_response(message, translated, res_id=res_id, lang=lang)
+            return
+
+        # 2. Standart Hujjat tahlili rejimi
         doc_id = uuid.uuid4().hex[:8]
-        sections = await ai_service.detect_document_sections(extracted_text, filename)
+        sections = await ai_service.detect_document_sections(extracted_text, filename, lang=lang)
 
         pending_docs[doc_id] = {
             "user_id": user_id,
@@ -714,6 +894,16 @@ async def handle_document_upload(message: Message):
             f"📊 <b>Hajmi:</b> taxminan {char_count:,} ta belgi matn\n"
             f"🎯 <b>Ushbu hujjatning qaysi bo'limi yoki yo'nalishini tahlil qilishni xohlaysiz?</b>\n\n"
             f"👇 <i>Quyidagi bo'limlardan birini tanlang yoki o'z maxsus so'rovingizni yozing:</i>"
+            if lang == "uz" else
+            (f"📄 <b>«{filename}» успешно принят!</b>\n\n"
+             f"📊 <b>Объем:</b> около {char_count:,} знаков текста\n"
+             f"🎯 <b>Какой раздел или направление документа вы хотите проанализировать?</b>\n\n"
+             f"👇 <i>Выберите один из разделов ниже или напишите свой запрос:</i>"
+             if lang == "ru" else
+             f"📄 <b>«{filename}» received successfully!</b>\n\n"
+             f"📊 <b>Size:</b> approx. {char_count:,} characters\n"
+             f"🎯 <b>Which section or aspect of this document would you like to analyze?</b>\n\n"
+             f"👇 <i>Choose a section below or type your custom query:</i>")
         )
 
         try:
@@ -724,7 +914,7 @@ async def handle_document_upload(message: Message):
         await message.reply(
             prompt_text,
             parse_mode="HTML",
-            reply_markup=get_document_sections_keyboard(doc_id, sections)
+            reply_markup=get_document_sections_keyboard(doc_id, sections, lang=lang)
         )
 
     except Exception as e:
@@ -758,6 +948,7 @@ async def handle_document_section_callback(callback: CallbackQuery):
         return
 
     user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
     filename = doc_data["filename"]
     text = doc_data["text"]
     sections = doc_data.get("sections", [])
@@ -765,7 +956,7 @@ async def handle_document_section_callback(callback: CallbackQuery):
 
     if action == "cancel":
         pending_docs.pop(doc_id, None)
-        await callback.answer("Bekor qilindi.")
+        await callback.answer("Bekor qilindi." if lang == "uz" else ("Отменено." if lang == "ru" else "Cancelled."))
         try:
             await callback.message.edit_text("❌ Hujjat tahlili bekor qilindi.", parse_mode="HTML")
         except Exception:
@@ -779,18 +970,22 @@ async def handle_document_section_callback(callback: CallbackQuery):
             f"📄 <b>«{filename}» hujjati</b>\n\n"
             f"📊 <b>Hajmi:</b> taxminan {char_count:,} belgi\n"
             f"🎯 <b>Qaysi bo'limni tahlil qilishni xohlaysiz?</b>"
+            if lang == "uz" else
+            (f"📄 <b>Документ «{filename}»</b>\n\n📊 <b>Объем:</b> около {char_count:,} знаков\n🎯 <b>Какой раздел проанализировать?</b>"
+             if lang == "ru" else
+             f"📄 <b>Document «{filename}»</b>\n\n📊 <b>Size:</b> approx. {char_count:,} chars\n🎯 <b>Which section to analyze?</b>")
         )
         try:
             await callback.message.edit_text(
                 prompt_text,
                 parse_mode="HTML",
-                reply_markup=get_document_sections_keyboard(doc_id, sections)
+                reply_markup=get_document_sections_keyboard(doc_id, sections, lang=lang)
             )
         except Exception:
             await callback.message.answer(
                 prompt_text,
                 parse_mode="HTML",
-                reply_markup=get_document_sections_keyboard(doc_id, sections)
+                reply_markup=get_document_sections_keyboard(doc_id, sections, lang=lang)
             )
         return
 
@@ -801,6 +996,14 @@ async def handle_document_section_callback(callback: CallbackQuery):
             f"✍️ <b>«{filename}» bo'yicha aniq so'rov:</b>\n\n"
             "Iltimos, hujjatning qaysi moddasi, bo'limi yoki mavzusi bo'yicha tahlil kerakligini yozib yuboring.\n\n"
             "<i>(Masalan: «22-moddadan 38-moddagacha bo'lgan qismini tahlil qilib ber» yoki «Mol-mulkni xatlash va auksion qoidalari»)</i>"
+            if lang == "uz" else
+            (f"✍️ <b>Точный запрос по «{filename}»:</b>\n\n"
+             "Пожалуйста, напишите, какую статью, раздел или тему документа проанализировать.\n\n"
+             "<i>(Например: «Анализ с 22 по 38 статью» или «Правила описи имущества и аукциона»)</i>"
+             if lang == "ru" else
+             f"✍️ <b>Specific query for «{filename}»:</b>\n\n"
+             "Please specify which article, section, or topic of the document you want analyzed.\n\n"
+             "<i>(Example: «Analyze articles 22 to 38» or «Asset seizure and auction procedures»)</i>")
         )
         await callback.message.answer(custom_msg, parse_mode="HTML")
         return
@@ -847,7 +1050,8 @@ async def handle_document_section_callback(callback: CallbackQuery):
             doc_text=text,
             filename=filename,
             section_name=section_title,
-            custom_prompt=doc_data.get("caption")
+            custom_prompt=doc_data.get("caption"),
+            lang=lang
         )
 
         try:
@@ -865,9 +1069,10 @@ async def handle_document_section_callback(callback: CallbackQuery):
             res_id=res_id,
             doc_id=doc_id,
             current_sec_idx=current_sec_idx,
-            has_next=has_next
+            has_next=has_next,
+            lang=lang
         )
-        await send_ai_response(callback.message, analysis, res_id=res_id, reply_markup=result_markup)
+        await send_ai_response(callback.message, analysis, res_id=res_id, reply_markup=result_markup, lang=lang)
 
     except Exception as e:
         logger.exception(f"Bo'lim tahlilida xatolik: {e}")
@@ -996,7 +1201,8 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                         pass
 
         if action in ("voice", "all"):
-            ogg_path, mp3_path = await convert_text_to_voice_and_audio(response)
+            user_lang = get_user_lang(item["user_id"])
+            ogg_path, mp3_path = await convert_text_to_voice_and_audio(response, lang=user_lang)
             try:
                 try:
                     await callback.message.answer_voice(
@@ -1069,14 +1275,17 @@ async def handle_content_action_callback(callback: CallbackQuery):
             await callback.answer("Ma'lumot xotirada eskirgan.", show_alert=True)
             return
 
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+
     if sub_act == "tr":
-        await callback.message.edit_reply_markup(reply_markup=get_transfer_keyboard(res_id))
-        await callback.answer("Bo'limni tanlang:")
+        await callback.message.edit_reply_markup(reply_markup=get_transfer_keyboard(res_id, lang=lang))
+        await callback.answer("Bo'limni tanlang:" if lang == "uz" else ("Выберите раздел:" if lang == "ru" else "Select section:"))
     elif sub_act == "ed":
-        await callback.message.edit_reply_markup(reply_markup=get_edit_keyboard(res_id))
-        await callback.answer("Tahrirlash turini tanlang:")
+        await callback.message.edit_reply_markup(reply_markup=get_edit_keyboard(res_id, lang=lang))
+        await callback.answer("Tahrirlash turini tanlang:" if lang == "uz" else ("Выберите тип:" if lang == "ru" else "Select type:"))
     elif sub_act == "back":
-        await callback.message.edit_reply_markup(reply_markup=get_content_actions_keyboard(res_id))
+        await callback.message.edit_reply_markup(reply_markup=get_content_actions_keyboard(res_id, lang=lang))
         await callback.answer("Asosiy holatga qaytdi.")
 
 
@@ -1113,6 +1322,8 @@ async def handle_transfer_execution(callback: CallbackQuery):
     content = item["content"]
     title = item["title"]
     user_name = item.get("user_name", "Foydalanuvchi")
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
 
     await callback.answer(f"O'tkazilmoqda...")
 
@@ -1123,7 +1334,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 document=FSInputFile(docx_path, filename=f"{title[:20]}.docx"),
                 caption=f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             if docx_path and os.path.exists(docx_path):
@@ -1136,7 +1347,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 document=FSInputFile(pdf_path, filename=f"{title[:20]}.pdf"),
                 caption=f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             if pdf_path and os.path.exists(pdf_path):
@@ -1156,7 +1367,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 document=FSInputFile(pptx_path, filename=f"{title[:20]}.pptx"),
                 caption=f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             if pptx_path and os.path.exists(pptx_path):
@@ -1176,7 +1387,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 document=FSInputFile(xlsx_path, filename=f"{title[:20]}.xlsx"),
                 caption=f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {title}</i>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             if xlsx_path and os.path.exists(xlsx_path):
@@ -1185,7 +1396,7 @@ async def handle_transfer_execution(callback: CallbackQuery):
     elif target == "deep":
         status_msg = await callback.message.reply("🔬 <i>Ushbu mavzu bo'yicha Deep Research o'tkazilmoqda...</i>", parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
-        deep_res = await ai_service.deep_research(callback.from_user.id, f"{title}\n{content[:500]}")
+        deep_res = await ai_service.deep_research(callback.from_user.id, f"{title}\n{content[:500]}", lang=lang)
         try:
             await status_msg.delete()
         except Exception:
@@ -1197,12 +1408,12 @@ async def handle_transfer_execution(callback: CallbackQuery):
             user_id=callback.from_user.id,
             category="research"
         )
-        await send_ai_response(callback.message, deep_res, res_id=new_res_id)
+        await send_ai_response(callback.message, deep_res, res_id=new_res_id, lang=lang)
 
     elif target == "voice":
         status_msg = await callback.message.reply("🎙 <i>Ovozli xabar tayyorlanmoqda...</i>", parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.RECORD_VOICE)
-        ogg_path, mp3_path = await convert_text_to_voice_and_audio(content)
+        ogg_path, mp3_path = await convert_text_to_voice_and_audio(content, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
@@ -1216,6 +1427,88 @@ async def handle_transfer_execution(callback: CallbackQuery):
             for p in (ogg_path, mp3_path):
                 if p and os.path.exists(p):
                     os.remove(p)
+
+    elif target == "trans":
+        choose_tr_text = (
+            "🌐 <b>Ushbu matnni qaysi tilga tarjima qilmoqchisiz?</b>\n\n"
+            "Kerakli tilni tanlang:"
+            if lang == "uz" else
+            ("🌐 <b>На какой язык вы хотите перевести этот текст?</b>\n\nВыберите язык:"
+             if lang == "ru" else
+             "🌐 <b>Which language would you like to translate this text into?</b>\n\nSelect language:")
+        )
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data=f"do_tr:uz:{res_id}"),
+                    InlineKeyboardButton(text="🇷🇺 Русский", callback_data=f"do_tr:ru:{res_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="🇬🇧 English", callback_data=f"do_tr:en:{res_id}"),
+                    InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"act:back:{res_id}")
+                ]
+            ]
+        )
+        try:
+            await callback.message.edit_reply_markup(reply_markup=kb)
+        except Exception:
+            await callback.message.answer(choose_tr_text, parse_mode="HTML", reply_markup=kb)
+        return
+
+
+@router.callback_query(F.data.startswith("do_tr:"))
+async def handle_direct_translation_callback(callback: CallbackQuery):
+    """Natijani to'g'ridan-to'g'ri tanlangan tilga tarjima qilish"""
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Xatolik!")
+        return
+
+    target_lang = parts[1]
+    res_id = parts[2]
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+
+    item = result_store.get(res_id)
+    if not item:
+        arch_item = archive_service.get_item(res_id)
+        if arch_item:
+            item = arch_item
+        else:
+            await callback.answer("Ma'lumot topilmadi.", show_alert=True)
+            return
+
+    content = item["content"]
+    title = item["title"]
+
+    await callback.answer("Tarjima qilinmoqda...")
+    status_msg = await callback.message.reply(
+        "🌐 <i>Tarjima qilinmoqda, iltimos kuting...</i>" if lang == "uz" else
+        ("🌐 <i>Выполняется перевод, пожалуйста подождите...</i>" if lang == "ru" else
+         "🌐 <i>Translating, please wait...</i>"),
+        parse_mode="HTML"
+    )
+    await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+
+    translated = await ai_service.translate_text(
+        text=content,
+        target_lang=target_lang,
+        source_lang="auto"
+    )
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    target_lang_names = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
+    new_res_id = store_result(
+        title=f"Tarjima ({target_lang_names.get(target_lang, target_lang)}): {title[:20]}",
+        content=translated,
+        user_name=callback.from_user.full_name or "Foydalanuvchi",
+        user_id=user_id,
+        category="trans"
+    )
+    await send_ai_response(callback.message, translated, res_id=new_res_id, lang=target_lang)
 
 
 @router.callback_query(F.data.startswith("ed:"))
@@ -1362,14 +1655,16 @@ async def handle_archive_callback(callback: CallbackQuery):
             "created_at": item["created_at"]
         }
 
+        lang = get_user_lang(user_id)
         category_labels = {
-            "doc": "📑 Hujjat tahlili",
+            "doc": "📑 Hujjat tahlili" if lang == "uz" else ("📑 Анализ документа" if lang == "ru" else "📑 Document Analysis"),
             "research": "🔬 Deep Research",
-            "audio": "🎙 Audio tahlil",
-            "image": "📸 Rasm tahlili",
-            "slides": "📽 Slaydlar, Prezentatsiya",
-            "office": "📊 Hujjatlar va jadvallar",
-            "chat": "🤖 AI Chat suhbati"
+            "audio": "🎙 Audio tahlil" if lang == "uz" else ("🎙 Анализ аудио" if lang == "ru" else "🎙 Audio Analysis"),
+            "image": "📸 Rasm tahlili" if lang == "uz" else ("📸 Анализ изображения" if lang == "ru" else "📸 Image Analysis"),
+            "slides": "📽 Slaydlar, Prezentatsiya" if lang == "uz" else ("📽 Слайды, Презентация" if lang == "ru" else "📽 Slides, Presentation"),
+            "office": "📊 Hujjatlar va jadvallar" if lang == "uz" else ("📊 Документы и таблицы" if lang == "ru" else "📊 Office Documents"),
+            "chat": "🤖 AI Chat suhbati" if lang == "uz" else ("🤖 AI Чат" if lang == "ru" else "🤖 AI Chat"),
+            "trans": "🌐 Tarjima" if lang == "uz" else ("🌐 Перевод" if lang == "ru" else "🌐 Translation")
         }
         cat_title = category_labels.get(item.get("category", "chat"), "📌 Saqlangan tahlil")
 
@@ -1666,6 +1961,7 @@ async def handle_text_message(message: Message):
         doc_id = current_mode.split(":", 1)[1]
         doc_data = pending_docs.get(doc_id)
         user_active_mode[user_id] = "NORMAL"
+        lang = get_user_lang(user_id)
 
         if doc_data:
             filename = doc_data["filename"]
@@ -1674,7 +1970,9 @@ async def handle_text_message(message: Message):
             custom_query = text.strip()
 
             status_msg = await message.reply(
-                f"⏳ <b>«{filename}»</b> hujjati bo'yicha <i>«{custom_query[:40]}»</i> talabi tahlil qilinmoqda...",
+                f"⏳ <b>«{filename}»</b> hujjati bo'yicha <i>«{custom_query[:40]}»</i> talabi tahlil qilinmoqda..." if lang == "uz" else
+                (f"⏳ По документу <b>«{filename}»</b> выполняется анализ <i>«{custom_query[:40]}»</i>..." if lang == "ru" else
+                 f"⏳ Analyzing <i>«{custom_query[:40]}»</i> for <b>«{filename}»</b>..."),
                 parse_mode="HTML"
             )
             await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
@@ -1684,7 +1982,8 @@ async def handle_text_message(message: Message):
                     user_id=user_id,
                     doc_text=text_content,
                     filename=filename,
-                    section_name=custom_query
+                    section_name=custom_query,
+                    lang=lang
                 )
                 try:
                     await status_msg.delete()
@@ -1697,8 +1996,8 @@ async def handle_text_message(message: Message):
 
                 title = f"{filename}: {custom_query[:25]}"
                 res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
-                result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False)
-                await send_ai_response(message, analysis, res_id=res_id, reply_markup=result_markup)
+                result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False, lang=lang)
+                await send_ai_response(message, analysis, res_id=res_id, reply_markup=result_markup, lang=lang)
                 return
             except Exception as e:
                 logger.exception(f"Maxsus so'rov tahlilida xatolik: {e}")
@@ -1711,23 +2010,68 @@ async def handle_text_message(message: Message):
         await process_instagram_download(message, match.group(0))
         return
 
-    # 2. Rejim: DEEP_RESEARCH
-    if current_mode == "DEEP_RESEARCH":
-        status_msg = await message.reply("🔬 <i>Mavzu bo'yicha chuqur izlanish (Deep Research) olib borilmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    # 1.5. Rejim: TRANSLATOR (Tarjimon)
+    if current_mode == "TRANSLATOR":
+        lang = get_user_lang(user_id)
+        dir_code = user_trans_direction.get(user_id, f"auto:{lang}")
+        if ":" in dir_code:
+            src, tgt = dir_code.split(":", 1)
+        else:
+            src, tgt = "auto", lang
+
+        status_msg = await message.reply(
+            "🌐 <i>Tarjima qilinmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("🌐 <i>Выполняется перевод, пожалуйста подождите...</i>" if lang == "ru" else
+             "🌐 <i>Translating, please wait...</i>"),
+            parse_mode="HTML"
+        )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
-        report = await ai_service.deep_research(user_id=user_id, query=text)
+        translated = await ai_service.translate_text(
+            text=text,
+            target_lang=tgt,
+            source_lang=src
+        )
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        if translated.startswith("⚠️") or translated.startswith("❌"):
+            await message.answer(translated, parse_mode="HTML")
+            return
+
+        target_lang_names = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
+        tgt_name = target_lang_names.get(tgt, tgt)
+        title = f"Tarjima ({tgt_name}): {text[:25]}"
+        res_id = store_result(title=title, content=translated, user_name=user_name, user_id=user_id, category="trans")
+        await send_ai_response(message, translated, res_id=res_id, lang=lang)
+        return
+
+    # 2. Rejim: DEEP_RESEARCH
+    if current_mode == "DEEP_RESEARCH":
+        lang = get_user_lang(user_id)
+        status_msg = await message.reply(
+            "🔬 <i>Mavzu bo'yicha chuqur izlanish (Deep Research) olib borilmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("🔬 <i>Проводится глубокое исследование (Deep Research), пожалуйста подождите...</i>" if lang == "ru" else
+             "🔬 <i>Conducting Deep Research, please wait...</i>"),
+            parse_mode="HTML"
+        )
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+        report = await ai_service.deep_research(user_id=user_id, query=text, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
             pass
 
         res_id = store_result(title=text[:35], content=report, user_name=user_name, user_id=user_id, category="research")
-        await send_ai_response(message, report, res_id=res_id)
+        await send_ai_response(message, report, res_id=res_id, lang=lang)
         return
 
     # 3. Rejim: SLIDES (Prezentatsiya)
     if current_mode == "SLIDES":
+        lang = get_user_lang(user_id)
         status_msg = await message.reply("📽 <i>Taqdimot slaydlari rejalashtirilmoqda va PowerPoint (.pptx) fayli yaratilmoqda...</i>", parse_mode="HTML")
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
@@ -1744,7 +2088,7 @@ async def handle_text_message(message: Message):
                 document=FSInputFile(pptx_path, filename=f"Prezentatsiya_{res_id}.pptx"),
                 caption=f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {text[:45]}</i>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             if pptx_path and os.path.exists(pptx_path):
@@ -1753,6 +2097,7 @@ async def handle_text_message(message: Message):
 
     # 4. Rejim: OFFICE_DOCS (Word, PDF, Excel)
     if current_mode == "OFFICE_DOCS":
+        lang = get_user_lang(user_id)
         status_msg = await message.reply("📊 <i>Ma'lumotlar qayta ishlanmoqda va hujjatlar tayyorlanmoqda...</i>", parse_mode="HTML")
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
@@ -1782,7 +2127,7 @@ async def handle_text_message(message: Message):
                 document=FSInputFile(xlsx_path, filename=f"Jadval_{res_id}.xlsx"),
                 caption="📊 <b>Excel jadvali (.xlsx)</b>",
                 parse_mode="HTML",
-                reply_markup=get_content_actions_keyboard(res_id)
+                reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
         finally:
             for p in (docx_path, pdf_path, xlsx_path):
@@ -1795,9 +2140,10 @@ async def handle_text_message(message: Message):
 
     # 5. Rejim: DOC_ANALYSIS (Matn shaklida tahlil so'ralsa)
     if current_mode == "DOC_ANALYSIS":
+        lang = get_user_lang(user_id)
         if len(text) > 1200:
             doc_id = uuid.uuid4().hex[:8]
-            sections = await ai_service.detect_document_sections(text, "Matnli Hujjat")
+            sections = await ai_service.detect_document_sections(text, "Matnli Hujjat", lang=lang)
             pending_docs[doc_id] = {
                 "user_id": user_id,
                 "user_name": user_name,
@@ -1812,18 +2158,28 @@ async def handle_text_message(message: Message):
                 f"📊 <b>Hajmi:</b> taxminan {len(text):,} ta belgi\n"
                 f"🎯 <b>Ushbu matnning qaysi bo'limi yoki yo'nalishini tahlil qilishni xohlaysiz?</b>\n\n"
                 f"👇 <i>Quyidagi bo'limlardan birini tanlang yoki o'z savolingizni yozing:</i>"
+                if lang == "uz" else
+                (f"📄 <b>Текстовый документ принят!</b>\n\n"
+                 f"📊 <b>Объем:</b> около {len(text):,} знаков\n"
+                 f"🎯 <b>Какой раздел вы хотите проанализировать?</b>\n\n"
+                 f"👇 <i>Выберите раздел ниже или напишите вопрос:</i>"
+                 if lang == "ru" else
+                 f"📄 <b>Text document received!</b>\n\n"
+                 f"📊 <b>Size:</b> approx. {len(text):,} characters\n"
+                 f"🎯 <b>Which section would you like to analyze?</b>\n\n"
+                 f"👇 <i>Select a section below or type your question:</i>")
             )
             await message.reply(
                 prompt_text,
                 parse_mode="HTML",
-                reply_markup=get_document_sections_keyboard(doc_id, sections)
+                reply_markup=get_document_sections_keyboard(doc_id, sections, lang=lang)
             )
             return
 
         status_msg = await message.reply("📑 <i>Hujjat matni tahlil qilinmoqda...</i>", parse_mode="HTML")
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
-        analysis = await ai_service.analyze_document(user_id=user_id, doc_text=text, filename="Matnli Hujjat")
+        analysis = await ai_service.analyze_document(user_id=user_id, doc_text=text, filename="Matnli Hujjat", lang=lang)
         try:
             await status_msg.delete()
         except Exception:
@@ -1834,10 +2190,11 @@ async def handle_text_message(message: Message):
             return
 
         res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name, user_id=user_id, category="doc")
-        await send_ai_response(message, analysis, res_id=res_id)
+        await send_ai_response(message, analysis, res_id=res_id, lang=lang)
         return
 
     # 6. Rejim: AI_CHAT yoki oddiy suhbat
+    lang = get_user_lang(user_id)
     status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
@@ -1852,7 +2209,7 @@ async def handle_text_message(message: Message):
         return
 
     res_id = store_result(title=text[:30], content=response, user_name=user_name, user_id=user_id, category="chat")
-    await send_ai_response(message, response, res_id=res_id)
+    await send_ai_response(message, response, res_id=res_id, lang=lang)
 
 
 async def process_instagram_download(message: Message, url: str):

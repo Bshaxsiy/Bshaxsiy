@@ -4,7 +4,7 @@ import uuid
 import logging
 import asyncio
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional, Dict
 
 import edge_tts
 from config import DOWNLOADS_DIR
@@ -158,21 +158,21 @@ ENGLISH_TERMS_MAP = [
 ]
 
 
-def clean_text_for_speech(text: str) -> str:
+def clean_text_for_speech(text: str, lang: str = "uz") -> str:
     """
     Matnni ovozli xabar uchun maxsus tozalash va fonetik jihatdan to'liq moslashtirish:
-    - Krill yozuvidagi so'zlarni avtomatik o'zbek lotiniga o'giradi (Edge-TTS xatolik berishi va harflarni tushirib qoldirishining oldini oladi);
+    - O'zbek tili uchun Krill yozuvidagi so'zlarni avtomatik o'zbek lotiniga o'giradi;
+    - Rus va ingliz tillari uchun o'z ona tilidagi alifbosini saqlaydi;
     - Barcha emojilarni yo'qotadi;
-    - Markdown va qo'shtirnoq belgilarini so'zga bo'shliq qo'shmasdan tozalaydi, shunda qo'shimchalar (-gi, -da, -ning) uzilib ketmaydi;
-    - Rim raqamlari va sonlar oralig'ini ravon so'zlarga aylantiradi;
-    - Qisqartmalarni (MIB, BHM, O'zR) to'g'ri o'zbekcha talaffuzga keltiradi;
+    - Markdown va format belgilarini tozalaydi;
     - Hech qanday ma'lumot oxiri qirqilmasdan to'liq ovozlashtiriladi.
     """
     if not text:
         return ""
 
-    # 1. Krill harflari bo'lsa, to'liq o'zbek lotiniga aylantirish
-    text = cyrillic_to_uzbek_latin(text)
+    # 1. O'zbek tili bo'lsa va Krill harflari bo'lsa, to'liq o'zbek lotiniga aylantirish
+    if lang == "uz":
+        text = cyrillic_to_uzbek_latin(text)
 
     # 2. Tizim va Telegram sarlavhalari / metama'lumotlarini tozalash
     text = re.sub(r"The current local time is:.*", "", text, flags=re.IGNORECASE)
@@ -291,18 +291,27 @@ def clean_text_for_speech(text: str) -> str:
     return text
 
 
+VOICE_MAP = {
+    "uz": DEFAULT_VOICE,
+    "ru": "ru-RU-SvetlanaNeural",
+    "en": "en-US-JennyNeural"
+}
+
+
 async def convert_text_to_voice_and_audio(
     text: str,
-    voice: str = DEFAULT_VOICE,
+    voice: Optional[str] = None,
+    lang: str = "uz",
     rate: str = "-6%"
 ) -> Tuple[str, str]:
     """
     Matnni tiniq va aniq talaffuzli audio xabarga aylantirish.
-    - rate='-6%' tezligi nutqni shoshilmasdan, dona-dona va har bir harfni aniq eshitilishini ta'minlaydi;
-    - apad=pad_dur=1.8 filtri ham OGG Opus ham MP3 oxiriga 1.8 soniya jimlik qo'shadi,
-      bu Telegram pleeri yoki telefon apparati audio oxirgi harflar va so'zlarni yutib yuborishining oldini oladi.
+    O'zbek, Rus va Ingliz tillari uchun to'g'ri neyron ovozlarni tanlaydi.
     """
-    cleaned_text = clean_text_for_speech(text)
+    if not voice:
+        voice = VOICE_MAP.get(lang, DEFAULT_VOICE)
+
+    cleaned_text = clean_text_for_speech(text, lang=lang)
     if not cleaned_text:
         cleaned_text = "Javob matni mavjud emas."
 
