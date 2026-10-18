@@ -258,44 +258,49 @@ def get_edit_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     )
 
 
-def get_audio_choice_keyboard(audio_id: str) -> InlineKeyboardMarkup:
+def get_audio_choice_keyboard(audio_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Audio tahlil va javob formatini tanlash tugmalari"""
+    text_label = "📝 Matn" if lang == "uz" else ("📝 Текст" if lang == "ru" else "📝 Text")
+    voice_label = "🎙 Ovozli (Audio)" if lang == "uz" else ("🎙 Голос (Аудио)" if lang == "ru" else "🎙 Voice (Audio)")
+    all_label = "✨ Barchasi birga (Hammasi)" if lang == "uz" else ("✨ Все форматы вместе" if lang == "ru" else "✨ All Formats Together")
+    cancel_label = "❌ Bekor qilish" if lang == "uz" else ("❌ Отмена" if lang == "ru" else "❌ Cancel")
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📝 Matn", callback_data=f"aud_mode:text:{audio_id}"),
-                InlineKeyboardButton(text="🎙 Ovozli (Audio)", callback_data=f"aud_mode:voice:{audio_id}")
+                InlineKeyboardButton(text=text_label, callback_data=f"aud_mode:text:{audio_id}"),
+                InlineKeyboardButton(text=voice_label, callback_data=f"aud_mode:voice:{audio_id}")
             ],
             [
                 InlineKeyboardButton(text="📄 Word (.docx)", callback_data=f"aud_mode:docx:{audio_id}"),
                 InlineKeyboardButton(text="📑 PDF (.pdf)", callback_data=f"aud_mode:pdf:{audio_id}")
             ],
             [
-                InlineKeyboardButton(text="✨ Barchasi birga (Hammasi)", callback_data=f"aud_mode:all:{audio_id}")
+                InlineKeyboardButton(text=all_label, callback_data=f"aud_mode:all:{audio_id}")
             ],
             [
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"aud_mode:cancel:{audio_id}")
+                InlineKeyboardButton(text=cancel_label, callback_data=f"aud_mode:cancel:{audio_id}")
             ]
         ]
     )
 
 
-def get_video_options_keyboard(video_path: str) -> InlineKeyboardMarkup:
+def get_video_options_keyboard(video_path: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Video yuklanganda dumaloq qilish yoki MP3 audio ajratish"""
     v_id = uuid.uuid4().hex[:8]
-    # Yo'lni saqlash
     pending_audio[f"vid_{v_id}"] = {"path": video_path}
+    circle_label = "🔘 Dumaloq video qilish" if lang == "uz" else ("🔘 Сделать видео-кружочек" if lang == "ru" else "🔘 Convert to Video Note")
+    audio_label = "🎵 MP3 audio ajratish" if lang == "uz" else ("🎵 Извлечь MP3 аудио" if lang == "ru" else "🎵 Extract MP3 Audio")
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔘 Dumaloq video qilish", callback_data=f"vid:circle:{v_id}"),
-                InlineKeyboardButton(text="🎵 MP3 audio ajratish", callback_data=f"vid:audio:{v_id}")
+                InlineKeyboardButton(text=circle_label, callback_data=f"vid:circle:{v_id}"),
+                InlineKeyboardButton(text=audio_label, callback_data=f"vid:audio:{v_id}")
             ]
         ]
     )
 
 
-def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page: int = 5) -> InlineKeyboardMarkup:
+def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page: int = 5, lang: str = "uz") -> InlineKeyboardMarkup:
     """Arxiv ro'yxati va sahifalash klaviaturasi"""
     kb = []
     category_icons = {
@@ -322,32 +327,47 @@ def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page
     # Sahifalash (Pagination) tugmalari
     nav_row = []
     total_pages = max(1, (total_count + per_page - 1) // per_page)
+    prev_label = "⬅️ Oldingi" if lang == "uz" else ("⬅️ Назад" if lang == "ru" else "⬅️ Prev")
+    next_label = "Keyingi ➡️" if lang == "uz" else ("Вперед ➡️" if lang == "ru" else "Next ➡️")
+
     if page > 0:
-        nav_row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"arx:p:{page - 1}"))
+        nav_row.append(InlineKeyboardButton(text=prev_label, callback_data=f"arx:p:{page - 1}"))
     nav_row.append(InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="arx:noop"))
     if (page + 1) * per_page < total_count:
-        nav_row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"arx:p:{page + 1}"))
+        nav_row.append(InlineKeyboardButton(text=next_label, callback_data=f"arx:p:{page + 1}"))
     if nav_row:
         kb.append(nav_row)
 
     # Boshqaruv tugmalari
+    clear_label = "🗑 Barcha arxivni tozalash" if lang == "uz" else ("🗑 Очистить весь архив" if lang == "ru" else "🗑 Clear Entire Archive")
+    refresh_label = "🔄 Yangilash" if lang == "uz" else ("🔄 Обновить" if lang == "ru" else "🔄 Refresh")
+    home_label = "🏠 Bosh menyu" if lang == "uz" else ("🏠 Главное меню" if lang == "ru" else "🏠 Main Menu")
+
     if total_count > 0:
         kb.append([
-            InlineKeyboardButton(text="🗑 Barcha arxivni tozalash", callback_data="arx:confirm_clear")
+            InlineKeyboardButton(text=clear_label, callback_data="arx:confirm_clear")
         ])
     kb.append([
-        InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"arx:p:{page}"),
-        InlineKeyboardButton(text="🏠 Bosh menyu", callback_data="arx:home")
+        InlineKeyboardButton(text=refresh_label, callback_data=f"arx:p:{page}"),
+        InlineKeyboardButton(text=home_label, callback_data="arx:home")
     ])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
-def get_archive_item_keyboard(item_id: str) -> InlineKeyboardMarkup:
+def get_archive_item_keyboard(item_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Tanlangan bitta arxiv yozuvini ko'rish va boshqarish tugmalari"""
+    read_label = "📖 To'liq matnni o'qish" if lang == "uz" else ("📖 Читать полностью" if lang == "ru" else "📖 Read Full Text")
+    voice_label = "🎙 Ovozli qilish" if lang == "uz" else ("🎙 Озвучить" if lang == "ru" else "🎙 Voice (TTS)")
+    trans_label = "🌐 Boshqa tilga tarjima" if lang == "uz" else ("🌐 Перевести на другой язык" if lang == "ru" else "🌐 Translate")
+    tr_label = "📂 Bo'limga o'tkazish" if lang == "uz" else ("📂 В другие форматы" if lang == "ru" else "📂 Transfer")
+    ed_label = "✏️ Tahrirlash" if lang == "uz" else ("✏️ Редактировать" if lang == "ru" else "✏️ Edit")
+    del_label = "🗑 Ushbu so'rovni o'chirish" if lang == "uz" else ("🗑 Удалить этот запрос" if lang == "ru" else "🗑 Delete This Item")
+    back_label = "🔙 Arxiv ro'yxatiga qaytish" if lang == "uz" else ("🔙 Назад к списку" if lang == "ru" else "🔙 Back to List")
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📖 To'liq matnni o'qish", callback_data=f"arx:read:{item_id}")
+                InlineKeyboardButton(text=read_label, callback_data=f"arx:read:{item_id}")
             ],
             [
                 InlineKeyboardButton(text="📄 Word (.docx)", callback_data=f"tr:docx:{item_id}"),
@@ -355,45 +375,49 @@ def get_archive_item_keyboard(item_id: str) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="📊 Excel (.xlsx)", callback_data=f"tr:xlsx:{item_id}"),
-                InlineKeyboardButton(text="📽 Prezentatsiya", callback_data=f"tr:pptx:{item_id}")
+                InlineKeyboardButton(text="📽 Prezentatsiya (.pptx)", callback_data=f"tr:pptx:{item_id}")
             ],
             [
-                InlineKeyboardButton(text="🎙 Ovozli qilish", callback_data=f"tr:voice:{item_id}"),
-                InlineKeyboardButton(text="🔬 Deep Research", callback_data=f"tr:deep:{item_id}")
+                InlineKeyboardButton(text=voice_label, callback_data=f"tr:voice:{item_id}"),
+                InlineKeyboardButton(text=trans_label, callback_data=f"tr:trans:{item_id}")
             ],
             [
-                InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{item_id}"),
-                InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{item_id}")
+                InlineKeyboardButton(text=tr_label, callback_data=f"act:tr:{item_id}"),
+                InlineKeyboardButton(text=ed_label, callback_data=f"act:ed:{item_id}")
             ],
             [
-                InlineKeyboardButton(text="🗑 Ushbu so'rovni o'chirish", callback_data=f"arx:confirm_del:{item_id}")
+                InlineKeyboardButton(text=del_label, callback_data=f"arx:confirm_del:{item_id}")
             ],
             [
-                InlineKeyboardButton(text="🔙 Arxiv ro'yxatiga qaytish", callback_data="arx:p:0")
+                InlineKeyboardButton(text=back_label, callback_data="arx:p:0")
             ]
         ]
     )
 
 
-def get_archive_delete_confirm_keyboard(item_id: str) -> InlineKeyboardMarkup:
+def get_archive_delete_confirm_keyboard(item_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Yozuvni o'chirishni tasdiqlash klaviaturasi"""
+    yes_label = "✅ Ha, o'chirilsin" if lang == "uz" else ("✅ Да, удалить" if lang == "ru" else "✅ Yes, delete")
+    no_label = "❌ Bekor qilish" if lang == "uz" else ("❌ Отмена" if lang == "ru" else "❌ Cancel")
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Ha, o'chirilsin", callback_data=f"arx:do_del:{item_id}"),
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"arx:view:{item_id}")
+                InlineKeyboardButton(text=yes_label, callback_data=f"arx:do_del:{item_id}"),
+                InlineKeyboardButton(text=no_label, callback_data=f"arx:view:{item_id}")
             ]
         ]
     )
 
 
-def get_archive_clear_confirm_keyboard() -> InlineKeyboardMarkup:
+def get_archive_clear_confirm_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     """Butun arxivni tozalashni tasdiqlash klaviaturasi"""
+    yes_label = "🗑 Ha, barchasini tozalash" if lang == "uz" else ("🗑 Да, очистить всё" if lang == "ru" else "🗑 Yes, clear all")
+    no_label = "❌ Bekor qilish" if lang == "uz" else ("❌ Отмена" if lang == "ru" else "❌ Cancel")
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🗑 Ha, barchasini tozalash", callback_data="arx:do_clear"),
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="arx:p:0")
+                InlineKeyboardButton(text=yes_label, callback_data="arx:do_clear"),
+                InlineKeyboardButton(text=no_label, callback_data="arx:p:0")
             ]
         ]
     )
@@ -421,14 +445,16 @@ async def send_ai_response(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     lang: Optional[str] = None
 ):
-    """Javobni xavfsiz formatda va harakat tugmalari bilan jo'natish"""
-    if not response_text:
-        await message.reply("Javob bo'sh qaytdi.")
-        return
-
     if lang is None:
         u_id = message.from_user.id if message.from_user else 0
         lang = get_user_lang(u_id) if u_id else "uz"
+
+    if not response_text:
+        await message.reply(
+            "Javob bo'sh qaytdi." if lang == "uz" else
+            ("Ответ пустой." if lang == "ru" else "Empty response.")
+        )
+        return
 
     markup = reply_markup if reply_markup else (get_content_actions_keyboard(res_id, lang=lang) if res_id else None)
     max_len = 4000
@@ -699,7 +725,11 @@ async def nav_ai_chat(message: Message):
         parts = text.split(maxsplit=1)
         if len(parts) > 1 and parts[1].strip():
             prompt = parts[1].strip()
-            status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
+            thinking_txt = (
+                "🤔 <i>O'ylamoqda...</i>" if lang == "uz" else
+                ("🤔 <i>Думает...</i>" if lang == "ru" else "🤔 <i>Thinking...</i>")
+            )
+            status_msg = await message.reply(thinking_txt, parse_mode="HTML")
             await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
             response = await ai_service.ask_gemini(user_id=message.from_user.id, prompt=prompt)
             try:
@@ -713,7 +743,7 @@ async def nav_ai_chat(message: Message):
                 user_id=message.from_user.id,
                 category="chat"
             )
-            await send_ai_response(message, response, res_id=res_id)
+            await send_ai_response(message, response, res_id=res_id, lang=lang)
             return
 
     await message.answer(
@@ -760,7 +790,7 @@ async def nav_archive(message: Message):
     await message.answer(
         text,
         parse_mode="HTML",
-        reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count)
+        reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count, lang=lang)
     )
 
 
@@ -1029,17 +1059,34 @@ async def handle_document_section_callback(callback: CallbackQuery):
             section_title = "Tanlangan bo'lim"
             has_next = False
     elif action == "all":
-        section_title = "Barcha bo'limlar bo'yicha to'liq va umumiy amaliy tahlil"
+        section_title = (
+            "Barcha bo'limlar bo'yicha to'liq va umumiy amaliy tahlil" if lang == "uz" else
+            ("Полный и общий практический анализ по всем разделам" if lang == "ru" else
+             "Comprehensive and practical analysis across all sections")
+        )
     elif action == "risks":
-        section_title = "Taraflarning huquqlari, majburiyatlari va amaliy yuridik xavflar"
+        section_title = (
+            "Taraflarning huquqlari, majburiyatlari va amaliy yuridik xavflar" if lang == "uz" else
+            ("Права, обязанности сторон и практические юридические риски" if lang == "ru" else
+             "Rights, obligations of parties and practical legal risks")
+        )
     elif action == "deadlines":
-        section_title = "Qat'iy muddatlar, moliyaviy raqamlar, jarimalar va javobgarlik"
+        section_title = (
+            "Qat'iy muddatlar, moliyaviy raqamlar, jarimalar va javobgarlik" if lang == "uz" else
+            ("Строгие сроки, финансовые показатели, штрафы и ответственность" if lang == "ru" else
+             "Strict deadlines, financial numbers, fines and liability")
+        )
     else:
         section_title = action
 
-    await callback.answer("Tahlil boshlanmoqda...")
+    await callback.answer(
+        "Tahlil boshlanmoqda..." if lang == "uz" else
+        ("Начинается анализ..." if lang == "ru" else "Starting analysis...")
+    )
     status_msg = await callback.message.reply(
-        f"⏳ <b>«{section_title}»</b> bo'yicha chuqur tahlil tayyorlanmoqda...",
+        f"⏳ <b>«{section_title}»</b> bo'yicha chuqur tahlil tayyorlanmoqda..." if lang == "uz" else
+        (f"⏳ Готовится глубокий анализ <b>«{section_title}»</b>..." if lang == "ru" else
+         f"⏳ Preparing deep analysis for <b>«{section_title}»</b>..."),
         parse_mode="HTML"
     )
     await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
@@ -1076,7 +1123,12 @@ async def handle_document_section_callback(callback: CallbackQuery):
 
     except Exception as e:
         logger.exception(f"Bo'lim tahlilida xatolik: {e}")
-        await status_msg.edit_text("❌ Bo'limni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
+        err_msg = (
+            "❌ Bo'limni tahlil qilishda xatolik yuz berdi." if lang == "uz" else
+            ("❌ Ошибка при анализе раздела." if lang == "ru" else
+             "❌ Error analyzing section.")
+        )
+        await status_msg.edit_text(err_msg, parse_mode="HTML")
 
 
 # =====================================================================
@@ -1092,6 +1144,7 @@ async def handle_audio_message(message: Message):
     """
     user_id = message.from_user.id
     user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
+    lang = get_user_lang(user_id)
     audio_obj = message.voice or message.audio
     file_id = audio_obj.file_id
     mime_type = getattr(audio_obj, "mime_type", "audio/ogg") or "audio/ogg"
@@ -1115,9 +1168,27 @@ async def handle_audio_message(message: Message):
         "• 📑 <b>PDF:</b> Chop etishga tayyor <code>.pdf</code> hujjati\n"
         "• ✨ <b>Barchasi birga:</b> Barcha formatlarda olish\n\n"
         "👇 <i>Quyidagi tugmalardan birini tanlang:</i>"
+        if lang == "uz" else
+        ("🎙 <b>Аудиосообщение принято!</b>\n\n"
+         "В каком формате вы хотите получить результат анализа?\n\n"
+         "• 📝 <b>Текст:</b> Письменный ответ в чате\n"
+         "• 🎙 <b>Голос:</b> Голосовое сообщение\n"
+         "• 📄 <b>Word:</b> Документ <code>.docx</code>\n"
+         "• 📑 <b>PDF:</b> Готовый документ <code>.pdf</code>\n"
+         "• ✨ <b>Все форматы:</b> Получить во всех форматах вместе\n\n"
+         "👇 <i>Выберите формат ниже:</i>"
+         if lang == "ru" else
+         "🎙 <b>Audio message received!</b>\n\n"
+         "In which format would you like to receive the analysis?\n\n"
+         "• 📝 <b>Text:</b> Written response in chat\n"
+         "• 🎙 <b>Voice:</b> Voice message\n"
+         "• 📄 <b>Word:</b> Formatted <code>.docx</code> file\n"
+         "• 📑 <b>PDF:</b> Ready <code>.pdf</code> document\n"
+         "• ✨ <b>All formats:</b> Get in all formats together\n\n"
+         "👇 <i>Select format below:</i>")
     )
 
-    await message.reply(choice_text, parse_mode="HTML", reply_markup=get_audio_choice_keyboard(audio_id))
+    await message.reply(choice_text, parse_mode="HTML", reply_markup=get_audio_choice_keyboard(audio_id, lang=lang))
 
 
 @router.callback_query(F.data.startswith("aud_mode:"))
@@ -1129,23 +1200,42 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
 
     action = parts[1]
     audio_id = parts[2]
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
 
     if action == "cancel":
         pending_audio.pop(audio_id, None)
-        await callback.answer("Bekor qilindi.")
+        await callback.answer("Bekor qilindi." if lang == "uz" else ("Отменено." if lang == "ru" else "Cancelled."))
         try:
-            await callback.message.edit_text("❌ Audio tahlili bekor qilindi.", parse_mode="HTML")
+            cancel_txt = (
+                "❌ Audio tahlili bekor qilindi." if lang == "uz" else
+                ("❌ Анализ аудио отменен." if lang == "ru" else "❌ Audio analysis cancelled.")
+            )
+            await callback.message.edit_text(cancel_txt, parse_mode="HTML")
         except Exception:
             pass
         return
 
     item = pending_audio.get(audio_id)
     if not item:
-        await callback.answer("Ushbu so'rov muddati o'tgan. Iltimos, audioni qaytadan yuboring.", show_alert=True)
+        expired_txt = (
+            "Ushbu so'rov muddati o'tgan. Iltimos, audioni qaytadan yuboring." if lang == "uz" else
+            ("Срок действия запроса истек. Пожалуйста, отправьте аудио снова." if lang == "ru" else
+             "Request expired. Please send audio again.")
+        )
+        await callback.answer(expired_txt, show_alert=True)
         return
 
-    await callback.answer("Tanlovingiz qabul qilindi!")
-    status_msg = await callback.message.edit_text("⏳ <i>Audio Gemini AI tomonidan tahlil qilinmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    await callback.answer(
+        "Tanlovingiz qabul qilindi!" if lang == "uz" else
+        ("Выбор принят!" if lang == "ru" else "Selection accepted!")
+    )
+    analyzing_audio_txt = (
+        "⏳ <i>Audio Gemini AI tomonidan tahlil qilinmoqda, iltimos kuting...</i>" if lang == "uz" else
+        ("⏳ <i>Аудио анализируется с помощью Gemini AI, пожалуйста подождите...</i>" if lang == "ru" else
+         "⏳ <i>Analyzing audio with Gemini AI, please wait...</i>")
+    )
+    status_msg = await callback.message.edit_text(analyzing_audio_txt, parse_mode="HTML")
 
     try:
         file_info = await callback.bot.get_file(item["file_id"])
@@ -1161,21 +1251,27 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
         )
 
         user_name = item.get("user_name", "Foydalanuvchi")
-        res_id = store_result(title="Audio Tahlil", content=response, user_name=user_name, user_id=item["user_id"], category="audio")
+        title_audio = "Audio Tahlil" if lang == "uz" else ("Анализ аудио" if lang == "ru" else "Audio Analysis")
+        res_id = store_result(title=title_audio, content=response, user_name=user_name, user_id=item["user_id"], category="audio")
 
         if action in ("text", "all"):
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-            await send_ai_response(callback.message, response, res_id=res_id)
+            await send_ai_response(callback.message, response, res_id=res_id, lang=lang)
 
         if action in ("docx", "all"):
-            docx_path = generate_docx(title="Audio Xabar Tahlili", content=response, user_name=user_name)
+            docx_path = generate_docx(title=title_audio, content=response, user_name=user_name)
+            caption_docx = (
+                "📄 <b>Audio xabar tahlili (Word hujjati)</b>" if lang == "uz" else
+                ("📄 <b>Анализ аудиосообщения (Документ Word)</b>" if lang == "ru" else
+                 "📄 <b>Audio analysis (Word document)</b>")
+            )
             try:
                 await callback.message.answer_document(
                     document=FSInputFile(docx_path, filename=f"Audio_Tahlil_{audio_id}.docx"),
-                    caption="📄 <b>Audio xabar tahlili (Word hujjati)</b>",
+                    caption=caption_docx,
                     parse_mode="HTML"
                 )
             finally:
@@ -1186,11 +1282,16 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                         pass
 
         if action in ("pdf", "all"):
-            pdf_path = generate_pdf(title="Audio Xabar Tahlili", content=response, user_name=user_name)
+            pdf_path = generate_pdf(title=title_audio, content=response, user_name=user_name)
+            caption_pdf = (
+                "📑 <b>Audio xabar tahlili (PDF hujjati)</b>" if lang == "uz" else
+                ("📑 <b>Анализ аудиосообщения (Документ PDF)</b>" if lang == "ru" else
+                 "📑 <b>Audio analysis (PDF document)</b>")
+            )
             try:
                 await callback.message.answer_document(
                     document=FSInputFile(pdf_path, filename=f"Audio_Tahlil_{audio_id}.pdf"),
-                    caption="📑 <b>Audio xabar tahlili (PDF hujjati)</b>",
+                    caption=caption_pdf,
                     parse_mode="HTML"
                 )
             finally:
@@ -1201,20 +1302,24 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                         pass
 
         if action in ("voice", "all"):
-            user_lang = get_user_lang(item["user_id"])
-            ogg_path, mp3_path = await convert_text_to_voice_and_audio(response, lang=user_lang)
+            ogg_path, mp3_path = await convert_text_to_voice_and_audio(response, lang=lang)
+            caption_voice = (
+                "🎙 <b>AI Ovozli Javobi</b>" if lang == "uz" else
+                ("🎙 <b>Голосовой ответ AI</b>" if lang == "ru" else
+                 "🎙 <b>AI Voice Response</b>")
+            )
             try:
                 try:
                     await callback.message.answer_voice(
                         voice=FSInputFile(ogg_path),
-                        caption="🎙 <b>AI Ovozli Javobi</b>",
+                        caption=caption_voice,
                         parse_mode="HTML"
                     )
                 except TelegramBadRequest as e:
                     if "VOICE_MESSAGES_FORBIDDEN" in str(e):
                         await callback.message.answer_audio(
                             audio=FSInputFile(mp3_path),
-                            caption="🎙 <b>AI Ovozli Javobi</b>",
+                            caption=caption_voice,
                             parse_mode="HTML"
                         )
                     else:
@@ -1286,7 +1391,7 @@ async def handle_content_action_callback(callback: CallbackQuery):
         await callback.answer("Tahrirlash turini tanlang:" if lang == "uz" else ("Выберите тип:" if lang == "ru" else "Select type:"))
     elif sub_act == "back":
         await callback.message.edit_reply_markup(reply_markup=get_content_actions_keyboard(res_id, lang=lang))
-        await callback.answer("Asosiy holatga qaytdi.")
+        await callback.answer("Asosiy holatga qaytdi." if lang == "uz" else ("Возврат назад." if lang == "ru" else "Back to original."))
 
 
 @router.callback_query(F.data.startswith("tr:"))
@@ -1325,14 +1430,22 @@ async def handle_transfer_execution(callback: CallbackQuery):
     user_id = callback.from_user.id
     lang = get_user_lang(user_id)
 
-    await callback.answer(f"O'tkazilmoqda...")
+    await callback.answer(
+        "O'tkazilmoqda..." if lang == "uz" else
+        ("Экспорт..." if lang == "ru" else "Transferring...")
+    )
 
     if target == "docx":
         docx_path = generate_docx(title=title, content=content, user_name=user_name)
+        caption_docx = (
+            f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
+            (f"📄 <b>Документ Word создан</b>\n<i>Тема: {title}</i>" if lang == "ru" else
+             f"📄 <b>Word document created</b>\n<i>Topic: {title}</i>")
+        )
         try:
             await callback.message.answer_document(
                 document=FSInputFile(docx_path, filename=f"{title[:20]}.docx"),
-                caption=f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
+                caption=caption_docx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -1342,10 +1455,15 @@ async def handle_transfer_execution(callback: CallbackQuery):
 
     elif target == "pdf":
         pdf_path = generate_pdf(title=title, content=content, user_name=user_name)
+        caption_pdf = (
+            f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
+            (f"📑 <b>Документ PDF создан</b>\n<i>Тема: {title}</i>" if lang == "ru" else
+             f"📑 <b>PDF document created</b>\n<i>Topic: {title}</i>")
+        )
         try:
             await callback.message.answer_document(
                 document=FSInputFile(pdf_path, filename=f"{title[:20]}.pdf"),
-                caption=f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {title}</i>",
+                caption=caption_pdf,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -1354,7 +1472,12 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 os.remove(pdf_path)
 
     elif target == "pptx":
-        status_msg = await callback.message.reply("📽 <i>Prezentatsiya slaydlari shakllantirilmoqda...</i>", parse_mode="HTML")
+        wait_pptx = (
+            "📽 <i>Prezentatsiya slaydlari shakllantirilmoqda...</i>" if lang == "uz" else
+            ("📽 <i>Формирование слайдов презентации...</i>" if lang == "ru" else
+             "📽 <i>Generating presentation slides...</i>")
+        )
+        status_msg = await callback.message.reply(wait_pptx, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
         slides_text = await ai_service.format_for_presentation(callback.from_user.id, content)
         pptx_path = generate_presentation(title=title, content=slides_text, user_name=user_name)
@@ -1362,10 +1485,15 @@ async def handle_transfer_execution(callback: CallbackQuery):
             await status_msg.delete()
         except Exception:
             pass
+        caption_pptx = (
+            f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
+            (f"📽 <b>Презентация PowerPoint создана</b>\n<i>Тема: {title}</i>" if lang == "ru" else
+             f"📽 <b>PowerPoint presentation created</b>\n<i>Topic: {title}</i>")
+        )
         try:
             await callback.message.answer_document(
                 document=FSInputFile(pptx_path, filename=f"{title[:20]}.pptx"),
-                caption=f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {title}</i>",
+                caption=caption_pptx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -1374,7 +1502,12 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 os.remove(pptx_path)
 
     elif target == "xlsx":
-        status_msg = await callback.message.reply("📊 <i>Excel jadvali shakllantirilmoqda...</i>", parse_mode="HTML")
+        wait_xlsx = (
+            "📊 <i>Excel jadvali shakllantirilmoqda...</i>" if lang == "uz" else
+            ("📊 <i>Формирование таблицы Excel...</i>" if lang == "ru" else
+             "📊 <i>Generating Excel spreadsheet...</i>")
+        )
+        status_msg = await callback.message.reply(wait_xlsx, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
         table_text = await ai_service.format_for_excel(callback.from_user.id, content)
         xlsx_path = generate_excel(title=title, content=table_text, user_name=user_name)
@@ -1382,10 +1515,15 @@ async def handle_transfer_execution(callback: CallbackQuery):
             await status_msg.delete()
         except Exception:
             pass
+        caption_xlsx = (
+            f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
+            (f"📊 <b>Таблица Excel создана</b>\n<i>Тема: {title}</i>" if lang == "ru" else
+             f"📊 <b>Excel table created</b>\n<i>Topic: {title}</i>")
+        )
         try:
             await callback.message.answer_document(
                 document=FSInputFile(xlsx_path, filename=f"{title[:20]}.xlsx"),
-                caption=f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {title}</i>",
+                caption=caption_xlsx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -1394,7 +1532,12 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 os.remove(xlsx_path)
 
     elif target == "deep":
-        status_msg = await callback.message.reply("🔬 <i>Ushbu mavzu bo'yicha Deep Research o'tkazilmoqda...</i>", parse_mode="HTML")
+        wait_deep = (
+            "🔬 <i>Ushbu mavzu bo'yicha Deep Research o'tkazilmoqda...</i>" if lang == "uz" else
+            ("🔬 <i>Проводится исследование Deep Research по этой теме...</i>" if lang == "ru" else
+             "🔬 <i>Conducting Deep Research on this topic...</i>")
+        )
+        status_msg = await callback.message.reply(wait_deep, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
         deep_res = await ai_service.deep_research(callback.from_user.id, f"{title}\n{content[:500]}", lang=lang)
         try:
@@ -1411,18 +1554,33 @@ async def handle_transfer_execution(callback: CallbackQuery):
         await send_ai_response(callback.message, deep_res, res_id=new_res_id, lang=lang)
 
     elif target == "voice":
-        status_msg = await callback.message.reply("🎙 <i>Ovozli xabar tayyorlanmoqda...</i>", parse_mode="HTML")
+        wait_voice_msg = (
+            "🎙 <i>Ovozli xabar tayyorlanmoqda...</i>" if lang == "uz" else
+            ("🎙 <i>Подготовка голосового сообщения...</i>" if lang == "ru" else
+             "🎙 <i>Preparing voice message...</i>")
+        )
+        status_msg = await callback.message.reply(wait_voice_msg, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.RECORD_VOICE)
         ogg_path, mp3_path = await convert_text_to_voice_and_audio(content, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
             pass
+        caption_voice = (
+            f"🎙 <b>Ovozli javob: {title}</b>" if lang == "uz" else
+            (f"🎙 <b>Голосовой ответ: {title}</b>" if lang == "ru" else
+             f"🎙 <b>Voice response: {title}</b>")
+        )
+        caption_audio = (
+            f"🎙 <b>Audio fayl: {title}</b>" if lang == "uz" else
+            (f"🎙 <b>Аудиофайл: {title}</b>" if lang == "ru" else
+             f"🎙 <b>Audio file: {title}</b>")
+        )
         try:
             try:
-                await callback.message.answer_voice(voice=FSInputFile(ogg_path), caption=f"🎙 <b>Ovozli javob: {title}</b>", parse_mode="HTML")
+                await callback.message.answer_voice(voice=FSInputFile(ogg_path), caption=caption_voice, parse_mode="HTML")
             except TelegramBadRequest:
-                await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption=f"🎙 <b>Audio fayl: {title}</b>", parse_mode="HTML")
+                await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption=caption_audio, parse_mode="HTML")
         finally:
             for p in (ogg_path, mp3_path):
                 if p and os.path.exists(p):
@@ -1545,32 +1703,60 @@ async def handle_edit_execution(callback: CallbackQuery):
     title = item["title"]
     user_name = item.get("user_name", "Foydalanuvchi")
 
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+
     instructions = {
-        "expand": "Ushbu tahlilni yanada kengaytirib, ko'proq tafsilotlar, misollar va tushuntirishlar bilan boyiting.",
-        "summary": "Ushbu tahlilni eng muhim xulosalarga qisqartiring, punktlar bilan lo'nda qilib bering.",
-        "rewrite": "Ushbu tahlilni yanada professional, ravon va ta'sirchan uslubda qayta shakllantiring.",
+        "expand": (
+            "Ushbu tahlilni yanada kengaytirib, ko'proq tafsilotlar, misollar va tushuntirishlar bilan boyiting." if lang == "uz" else
+            ("Расширьте этот анализ, добавьте больше деталей, практических примеров и подробных разъяснений." if lang == "ru" else
+             "Expand this analysis with more details, practical examples, and comprehensive explanations.")
+        ),
+        "summary": (
+            "Ushbu tahlilni eng muhim xulosalarga qisqartiring, punktlar bilan lo'nda qilib bering." if lang == "uz" else
+            ("Сократите этот анализ до ключевых выводов, оформите кратко и четко по пунктам." if lang == "ru" else
+             "Summarize this analysis to the key takeaways and bullet points.")
+        ),
+        "rewrite": (
+            "Ushbu tahlilni yanada professional, ravon va ta'sirchan uslubda qayta shakllantiring." if lang == "uz" else
+            ("Перепишите этот анализ в более профессиональном, грамотном и убедительном стиле." if lang == "ru" else
+             "Rewrite this analysis in a professional, fluent, and compelling style.")
+        ),
         "truz": "Ushbu matnni toza, ravon va adabiy o'zbek tiliga o'giring."
     }
 
-    instruction = instructions.get(edit_type, "Matnni qayta ishlang.")
-    await callback.answer("Tahrirlanmoqda...")
-    status_msg = await callback.message.reply("✏️ <i>Tahrirlanmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    default_instruction = (
+        "Matnni qayta ishlang." if lang == "uz" else
+        ("Переработайте текст." if lang == "ru" else "Refine the text.")
+    )
+    instruction = instructions.get(edit_type, default_instruction)
+    await callback.answer(
+        "Tahrirlanmoqda..." if lang == "uz" else
+        ("Редактирование..." if lang == "ru" else "Editing...")
+    )
+    status_msg = await callback.message.reply(
+        "✏️ <i>Tahrirlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+        ("✏️ <i>Редактируется, пожалуйста подождите...</i>" if lang == "ru" else
+         "✏️ <i>Editing, please wait...</i>"),
+        parse_mode="HTML"
+    )
     await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
 
-    new_content = await ai_service.refine_content(callback.from_user.id, content, instruction)
+    new_content = await ai_service.refine_content(user_id, content, instruction)
     try:
         await status_msg.delete()
     except Exception:
         pass
 
+    edit_suffix = "Tahrirlangan" if lang == "uz" else ("Отредактировано" if lang == "ru" else "Edited")
     new_res_id = store_result(
-        title=f"{title} (Tahrirlangan)",
+        title=f"{title} ({edit_suffix})",
         content=new_content,
         user_name=user_name,
-        user_id=callback.from_user.id,
+        user_id=user_id,
         category="chat"
     )
-    await send_ai_response(callback.message, new_content, res_id=new_res_id)
+    await send_ai_response(callback.message, new_content, res_id=new_res_id, lang=lang)
 
 
 # =====================================================================
@@ -1587,19 +1773,21 @@ async def handle_archive_callback(callback: CallbackQuery):
 
     action = parts[1]
     user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
 
     if action == "noop":
         await callback.answer()
         return
 
     if action == "home":
-        await callback.answer("Bosh menyu")
+        await callback.answer("Bosh menyu" if lang == "uz" else ("Главное меню" if lang == "ru" else "Main menu"))
         is_admin = access_guard.is_admin(user_id)
         try:
             await callback.message.delete()
         except Exception:
             pass
-        await callback.message.answer("🏠 <b>Bosh menyu</b>", parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin))
+        menu_title = "🏠 <b>Bosh menyu</b>" if lang == "uz" else ("🏠 <b>Главное меню</b>" if lang == "ru" else "🏠 <b>Main menu</b>")
+        await callback.message.answer(menu_title, parse_mode="HTML", reply_markup=get_main_keyboard(is_admin=is_admin, lang=lang))
         return
 
     # Sahifalash: arx:p:{page}
@@ -1609,14 +1797,18 @@ async def handle_archive_callback(callback: CallbackQuery):
         per_page = 5
 
         if total_count == 0:
+            empty_txt = (
+                "🗄 <b>Arxivingiz bo'sh.</b>\n\nYangi so'rovlaringiz avtomatik ravishda saqlanib boradi."
+                if lang == "uz" else
+                ("🗄 <b>Ваш архив пуст.</b>\n\nНовые запросы будут автоматически сохраняться."
+                 if lang == "ru" else
+                 "🗄 <b>Your archive is empty.</b>\n\nYour new requests will be saved automatically.")
+            )
             try:
-                await callback.message.edit_text(
-                    "🗄 <b>Arxivingiz bo'sh.</b>\n\nYangi so'rovlaringiz avtomatik ravishda saqlanib boradi.",
-                    parse_mode="HTML"
-                )
+                await callback.message.edit_text(empty_txt, parse_mode="HTML")
             except Exception:
                 pass
-            await callback.answer("Arxiv bo'sh.")
+            await callback.answer("Arxiv bo'sh." if lang == "uz" else ("Архив пуст." if lang == "ru" else "Archive is empty."))
             return
 
         offset = page * per_page
@@ -1626,12 +1818,20 @@ async def handle_archive_callback(callback: CallbackQuery):
             f"🗄 <b>Sizning so'rovlar arxivingiz</b>\n"
             f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
             f"👇 <i>Kerakli so'rovni tanlang:</i>"
+            if lang == "uz" else
+            (f"🗄 <b>Ваш архив запросов</b>\n"
+             f"📊 <b>Всего сохранено:</b> {total_count}\n\n"
+             f"👇 <i>Выберите нужный запрос:</i>"
+             if lang == "ru" else
+             f"🗄 <b>Your request archive</b>\n"
+             f"📊 <b>Total saved:</b> {total_count}\n\n"
+             f"👇 <i>Select a request:</i>")
         )
         try:
             await callback.message.edit_text(
                 text,
                 parse_mode="HTML",
-                reply_markup=get_archive_list_keyboard(items=items, page=page, total_count=total_count, per_page=per_page)
+                reply_markup=get_archive_list_keyboard(items=items, page=page, total_count=total_count, per_page=per_page, lang=lang)
             )
         except Exception:
             pass
@@ -1643,7 +1843,12 @@ async def handle_archive_callback(callback: CallbackQuery):
         item_id = parts[2]
         item = archive_service.get_item(item_id)
         if not item:
-            await callback.answer("Ushbu yozuv arxivdan topilmadi yoki o'chirilgan.", show_alert=True)
+            err_not_found = (
+                "Ushbu yozuv arxivdan topilmadi yoki o'chirilgan." if lang == "uz" else
+                ("Запись не найдена в архиве или уже удалена." if lang == "ru" else
+                 "Record not found in archive or already deleted.")
+            )
+            await callback.answer(err_not_found, show_alert=True)
             return
 
         # Natijalar keshiga kiritish (Word, PDF, Excel, Ovozli qilish tugmalari ishlashi uchun)
@@ -1655,7 +1860,6 @@ async def handle_archive_callback(callback: CallbackQuery):
             "created_at": item["created_at"]
         }
 
-        lang = get_user_lang(user_id)
         category_labels = {
             "doc": "📑 Hujjat tahlili" if lang == "uz" else ("📑 Анализ документа" if lang == "ru" else "📑 Document Analysis"),
             "research": "🔬 Deep Research",
@@ -1666,7 +1870,8 @@ async def handle_archive_callback(callback: CallbackQuery):
             "chat": "🤖 AI Chat suhbati" if lang == "uz" else ("🤖 AI Чат" if lang == "ru" else "🤖 AI Chat"),
             "trans": "🌐 Tarjima" if lang == "uz" else ("🌐 Перевод" if lang == "ru" else "🌐 Translation")
         }
-        cat_title = category_labels.get(item.get("category", "chat"), "📌 Saqlangan tahlil")
+        default_cat = "📌 Saqlangan tahlil" if lang == "uz" else ("📌 Сохраненный анализ" if lang == "ru" else "📌 Saved analysis")
+        cat_title = category_labels.get(item.get("category", "chat"), default_cat)
 
         preview_text = item["content"][:400].strip()
         if len(item["content"]) > 400:
@@ -1679,19 +1884,33 @@ async def handle_archive_callback(callback: CallbackQuery):
             f"📌 <b>Sarlavha:</b> <b>{item['title']}</b>\n\n"
             f"📝 <b>Qisqacha mazmun:</b>\n<i>{preview_text}</i>\n\n"
             f"👇 <i>Hujjatni yuklab olish, tahrirlash, ovozli eshitish yoki o'chirish:</i>"
+            if lang == "uz" else
+            (f"🗄 <b>Запрос из архива:</b>\n\n"
+             f"🏷 <b>Раздел:</b> {cat_title}\n"
+             f"📅 <b>Время:</b> <code>{item['created_at']}</code>\n"
+             f"📌 <b>Заголовок:</b> <b>{item['title']}</b>\n\n"
+             f"📝 <b>Краткое содержание:</b>\n<i>{preview_text}</i>\n\n"
+             f"👇 <i>Скачать документ, редактировать, прослушать или удалить:</i>"
+             if lang == "ru" else
+             f"🗄 <b>Archived request:</b>\n\n"
+             f"🏷 <b>Section:</b> {cat_title}\n"
+             f"📅 <b>Time:</b> <code>{item['created_at']}</code>\n"
+             f"📌 <b>Title:</b> <b>{item['title']}</b>\n\n"
+             f"📝 <b>Summary:</b>\n<i>{preview_text}</i>\n\n"
+             f"👇 <i>Download document, edit, listen or delete:</i>")
         )
 
         try:
             await callback.message.edit_text(
                 msg,
                 parse_mode="HTML",
-                reply_markup=get_archive_item_keyboard(item_id)
+                reply_markup=get_archive_item_keyboard(item_id, lang=lang)
             )
         except Exception:
             await callback.message.answer(
                 msg,
                 parse_mode="HTML",
-                reply_markup=get_archive_item_keyboard(item_id)
+                reply_markup=get_archive_item_keyboard(item_id, lang=lang)
             )
         await callback.answer()
         return
@@ -1701,7 +1920,11 @@ async def handle_archive_callback(callback: CallbackQuery):
         item_id = parts[2]
         item = archive_service.get_item(item_id)
         if not item:
-            await callback.answer("Yozuv topilmadi.", show_alert=True)
+            err_not_found = (
+                "Yozuv topilmadi." if lang == "uz" else
+                ("Запись не найдена." if lang == "ru" else "Record not found.")
+            )
+            await callback.answer(err_not_found, show_alert=True)
             return
 
         result_store[item_id] = {
@@ -1711,12 +1934,16 @@ async def handle_archive_callback(callback: CallbackQuery):
             "user_id": item["user_id"],
             "created_at": item["created_at"]
         }
-        await callback.answer("To'liq matn yuborilmoqda...")
+        await callback.answer(
+            "To'liq matn yuborilmoqda..." if lang == "uz" else
+            ("Отправка полного текста..." if lang == "ru" else "Sending full text...")
+        )
         await send_ai_response(
             callback.message,
             item["content"],
             res_id=item_id,
-            reply_markup=get_archive_item_keyboard(item_id)
+            reply_markup=get_archive_item_keyboard(item_id, lang=lang),
+            lang=lang
         )
         return
 
@@ -1724,17 +1951,25 @@ async def handle_archive_callback(callback: CallbackQuery):
     if action == "confirm_del" and len(parts) >= 3:
         item_id = parts[2]
         item = archive_service.get_item(item_id)
-        title = item["title"] if item else "Ushbu so'rov"
+        title = item["title"] if item else ("Ushbu so'rov" if lang == "uz" else ("Этот запрос" if lang == "ru" else "This request"))
         confirm_text = (
             f"❓ <b>Haqiqatan ham ushbu yozuvni arxivdan o'chirmoqchimisiz?</b>\n\n"
             f"📌 <i>«{title}»</i>\n\n"
             f"⚠️ <i>O'chirilgandan so'ng ma'lumotni qayta tiklab bo'lmaydi.</i>"
+            if lang == "uz" else
+            (f"❓ <b>Вы действительно хотите удалить эту запись из архива?</b>\n\n"
+             f"📌 <i>«{title}»</i>\n\n"
+             f"⚠️ <i>После удаления восстановить данные невозможно.</i>"
+             if lang == "ru" else
+             f"❓ <b>Are you sure you want to delete this record from the archive?</b>\n\n"
+             f"📌 <i>«{title}»</i>\n\n"
+             f"⚠️ <i>Once deleted, this cannot be recovered.</i>")
         )
         try:
             await callback.message.edit_text(
                 confirm_text,
                 parse_mode="HTML",
-                reply_markup=get_archive_delete_confirm_keyboard(item_id)
+                reply_markup=get_archive_delete_confirm_keyboard(item_id, lang=lang)
             )
         except Exception:
             pass
@@ -1748,18 +1983,32 @@ async def handle_archive_callback(callback: CallbackQuery):
         result_store.pop(item_id, None)
 
         if success:
-            await callback.answer("✅ Yozuv arxivdan muvaffaqiyatli o'chirildi!", show_alert=True)
+            del_ok = (
+                "✅ Yozuv arxivdan muvaffaqiyatli o'chirildi!" if lang == "uz" else
+                ("✅ Запись успешно удалена из архива!" if lang == "ru" else
+                 "✅ Record deleted successfully from archive!")
+            )
+            await callback.answer(del_ok, show_alert=True)
         else:
-            await callback.answer("⚠️ Yozuv topilmadi yoki allaqachon o'chirilgan.", show_alert=True)
+            del_err = (
+                "⚠️ Yozuv topilmadi yoki allaqachon o'chirilgan." if lang == "uz" else
+                ("⚠️ Запись не найдена или уже удалена." if lang == "ru" else
+                 "⚠️ Record not found or already deleted.")
+            )
+            await callback.answer(del_err, show_alert=True)
 
         # Yangilangan ro'yxatga qaytarish
         total_count = archive_service.get_user_count(user_id)
         if total_count == 0:
+            cleared_txt = (
+                "🗄 <b>Sizning arxivingiz tozalandi (bo'sh).</b>\n\nYangi so'rovlaringiz avtomatik tarzda saqlanadi."
+                if lang == "uz" else
+                ("🗄 <b>Ваш архив очищен (пуст).</b>\n\nНовые запросы будут автоматически сохраняться."
+                 if lang == "ru" else
+                 "🗄 <b>Your archive has been cleared (empty).</b>\n\nNew requests will be saved automatically.")
+            )
             try:
-                await callback.message.edit_text(
-                    "🗄 <b>Sizning arxivingiz tozalandi (bo'sh).</b>\n\nYangi so'rovlaringiz avtomatik tarzda saqlanadi.",
-                    parse_mode="HTML"
-                )
+                await callback.message.edit_text(cleared_txt, parse_mode="HTML")
             except Exception:
                 pass
             return
@@ -1769,12 +2018,20 @@ async def handle_archive_callback(callback: CallbackQuery):
             f"🗄 <b>Sizning so'rovlar arxivingiz</b>\n"
             f"📊 <b>Jami saqlangan so'rovlar:</b> {total_count} ta\n\n"
             f"👇 <i>Kerakli so'rovni tanlang:</i>"
+            if lang == "uz" else
+            (f"🗄 <b>Ваш архив запросов</b>\n"
+             f"📊 <b>Всего сохранено:</b> {total_count}\n\n"
+             f"👇 <i>Выберите нужный запрос:</i>"
+             if lang == "ru" else
+             f"🗄 <b>Your request archive</b>\n"
+             f"📊 <b>Total saved:</b> {total_count}\n\n"
+             f"👇 <i>Select a request:</i>")
         )
         try:
             await callback.message.edit_text(
                 text,
                 parse_mode="HTML",
-                reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count)
+                reply_markup=get_archive_list_keyboard(items=items, page=0, total_count=total_count, lang=lang)
             )
         except Exception:
             pass
@@ -1787,12 +2044,20 @@ async def handle_archive_callback(callback: CallbackQuery):
             f"⚠️ <b>DIQQAT: Butun arxivni tozalash!</b>\n\n"
             f"Barcha <b>{total_count} ta</b> saqlangan so'rov va natijalaringiz arxivdan butunlay o'chiriladi.\n\n"
             f"Arxivni tozalashni tasdiqlaysizmi?"
+            if lang == "uz" else
+            (f"⚠️ <b>ВНИМАНИЕ: Очистка всего архива!</b>\n\n"
+             f"Все ваши <b>{total_count}</b> сохраненных запросов и результатов будут безвозвратно удалены.\n\n"
+             f"Подтверждаете очистку архива?"
+             if lang == "ru" else
+             f"⚠️ <b>WARNING: Clear entire archive!</b>\n\n"
+             f"All your <b>{total_count}</b> saved requests and results will be permanently deleted.\n\n"
+             f"Do you confirm clearing the archive?")
         )
         try:
             await callback.message.edit_text(
                 confirm_text,
                 parse_mode="HTML",
-                reply_markup=get_archive_clear_confirm_keyboard()
+                reply_markup=get_archive_clear_confirm_keyboard(lang=lang)
             )
         except Exception:
             pass
@@ -1802,12 +2067,21 @@ async def handle_archive_callback(callback: CallbackQuery):
     # Butun arxivni tozalashni bajarish: arx:do_clear
     if action == "do_clear":
         deleted_count = archive_service.clear_user_archive(user_id)
-        await callback.answer(f"✅ Arxiv to'liq tozalandi ({deleted_count} ta so'rov o'chirildi)!", show_alert=True)
+        clear_ok = (
+            f"✅ Arxiv to'liq tozalandi ({deleted_count} ta so'rov o'chirildi)!" if lang == "uz" else
+            (f"✅ Архив полностью очищен ({deleted_count} запросов удалено)!" if lang == "ru" else
+             f"✅ Archive completely cleared ({deleted_count} requests deleted)!")
+        )
+        await callback.answer(clear_ok, show_alert=True)
+        cleared_msg = (
+            "🗄 <b>Arxiv to'liq tozalandi.</b>\n\nYangi so'rovlaringiz avtomatik tarzda qaytadan saqlanadi."
+            if lang == "uz" else
+            ("🗄 <b>Архив полностью очищен.</b>\n\nНовые запросы будут автоматически сохраняться."
+             if lang == "ru" else
+             "🗄 <b>Archive completely cleared.</b>\n\nNew requests will be saved automatically.")
+        )
         try:
-            await callback.message.edit_text(
-                "🗄 <b>Arxiv to'liq tozalandi.</b>\n\nYangi so'rovlaringiz avtomatik tarzda qaytadan saqlanadi.",
-                parse_mode="HTML"
-            )
+            await callback.message.edit_text(cleared_msg, parse_mode="HTML")
         except Exception:
             pass
         return
@@ -1820,7 +2094,13 @@ async def handle_archive_callback(callback: CallbackQuery):
 @router.message(F.video)
 async def handle_video_message(message: Message):
     """Video qabul qilinganda dumaloq qilish yoki MP3 audio ajratish taklifi"""
-    status_msg = await message.reply("⏳ <i>Video qabul qilindi. Dumaloq (Video Note) formatiga aylantirilmoqda...</i>", parse_mode="HTML")
+    lang = get_user_lang(message.from_user.id)
+    wait_video = (
+        "⏳ <i>Video qabul qilindi. Dumaloq (Video Note) formatiga aylantirilmoqda...</i>" if lang == "uz" else
+        ("⏳ <i>Видео принято. Преобразование в формат видеосообщения (кружок)...</i>" if lang == "ru" else
+         "⏳ <i>Video received. Converting to video note...</i>")
+    )
+    status_msg = await message.reply(wait_video, parse_mode="HTML")
     input_path = None
     circle_path = None
 
@@ -1842,16 +2122,31 @@ async def handle_video_message(message: Message):
     except TelegramBadRequest as e:
         if "VOICE_MESSAGES_FORBIDDEN" in str(e):
             if circle_path and os.path.exists(circle_path):
-                await message.answer_video(video=FSInputFile(circle_path), caption="🔘 <b>Dumaloq video tayyor!</b>", parse_mode="HTML")
+                caption_circle = (
+                    "🔘 <b>Dumaloq video tayyor!</b>" if lang == "uz" else
+                    ("🔘 <b>Круглое видео готово!</b>" if lang == "ru" else
+                     "🔘 <b>Video note ready!</b>")
+                )
+                await message.answer_video(video=FSInputFile(circle_path), caption=caption_circle, parse_mode="HTML")
                 try:
                     await status_msg.delete()
                 except Exception:
                     pass
         else:
-            await status_msg.edit_text("❌ Telegram xatoligi yuz berdi.", parse_mode="HTML")
+            err_tg = (
+                "❌ Telegram xatoligi yuz berdi." if lang == "uz" else
+                ("❌ Произошла ошибка Telegram." if lang == "ru" else
+                 "❌ Telegram error occurred.")
+            )
+            await status_msg.edit_text(err_tg, parse_mode="HTML")
     except Exception as e:
         logger.exception(f"Videoni dumaloq qilishda xatolik: {e}")
-        await status_msg.edit_text("❌ Videoni aylantirishda xatolik yuz berdi.", parse_mode="HTML")
+        err_conv = (
+            "❌ Videoni aylantirishda xatolik yuz berdi." if lang == "uz" else
+            ("❌ Ошибка при конвертации видео." if lang == "ru" else
+             "❌ Error converting video.")
+        )
+        await status_msg.edit_text(err_conv, parse_mode="HTML")
     finally:
         for path in (input_path, circle_path):
             if path and os.path.exists(path):
@@ -1867,30 +2162,61 @@ async def handle_video_callback(callback: CallbackQuery):
     action = parts[1]
     v_id = parts[2]
     item = pending_audio.get(f"vid_{v_id}")
+    lang = get_user_lang(callback.from_user.id)
 
     if not item or "path" not in item:
-        await callback.answer("Video eskirgan.", show_alert=True)
+        err_exp = (
+            "Video eskirgan." if lang == "uz" else
+            ("Видео устарело." if lang == "ru" else "Video expired.")
+        )
+        await callback.answer(err_exp, show_alert=True)
         return
 
     video_path = item["path"]
     if action == "audio":
-        await callback.answer("Audio ajratilmoqda...")
-        status_msg = await callback.message.reply("🎵 <i>Audioni MP3 formatida ajratib olinmoqda...</i>", parse_mode="HTML")
+        await callback.answer(
+            "Audio ajratilmoqda..." if lang == "uz" else
+            ("Извлечение аудио..." if lang == "ru" else "Extracting audio...")
+        )
+        wait_aud = (
+            "🎵 <i>Audioni MP3 formatida ajratib olinmoqda...</i>" if lang == "uz" else
+            ("🎵 <i>Извлечение аудио в формате MP3...</i>" if lang == "ru" else
+             "🎵 <i>Extracting audio in MP3 format...</i>")
+        )
+        status_msg = await callback.message.reply(wait_aud, parse_mode="HTML")
         try:
             mp3_path = await extract_audio_from_video(video_path)
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-            await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption="🎵 <b>Videodan ajratilgan MP3 audio</b>", parse_mode="HTML")
+            caption_mp3 = (
+                "🎵 <b>Videodan ajratilgan MP3 audio</b>" if lang == "uz" else
+                ("🎵 <b>MP3 аудио из видео</b>" if lang == "ru" else
+                 "🎵 <b>MP3 audio extracted from video</b>")
+            )
+            await callback.message.answer_audio(audio=FSInputFile(mp3_path), caption=caption_mp3, parse_mode="HTML")
             if os.path.exists(mp3_path):
                 os.remove(mp3_path)
         except Exception as e:
-            await status_msg.edit_text(f"❌ Audio ajratishda xatolik: {e}", parse_mode="HTML")
+            err_aud = (
+                f"❌ Audio ajratishda xatolik: {e}" if lang == "uz" else
+                (f"❌ Ошибка извлечения аудио: {e}" if lang == "ru" else
+                 f"❌ Error extracting audio: {e}")
+            )
+            await status_msg.edit_text(err_aud, parse_mode="HTML")
 
     elif action == "circle":
-        await callback.answer("Dumaloq video tayyorlanmoqda...")
-        status_msg = await callback.message.reply("⏳ <i>Dumaloq formatga o'tkazilmoqda...</i>", parse_mode="HTML")
+        await callback.answer(
+            "Dumaloq video tayyorlanmoqda..." if lang == "uz" else
+            ("Подготовка круглого видео..." if lang == "ru" else "Preparing video note...")
+        )
+        wait_circ = (
+            "⏳ <i>Dumaloq formatga o'tkazilmoqda...</i>" if lang == "uz" else
+            ("⏳ <i>Преобразование в круглое видео...</i>" if lang == "ru" else
+             "⏳ <i>Converting to video note...</i>")
+        )
+        status_msg = await callback.message.reply(wait_circ, parse_mode="HTML")
         try:
             circle_path, duration = await convert_to_video_note(video_path, max_duration=60)
             await callback.message.answer_video_note(video_note=FSInputFile(circle_path), length=384, duration=duration)
@@ -1901,16 +2227,27 @@ async def handle_video_callback(callback: CallbackQuery):
             if os.path.exists(circle_path):
                 os.remove(circle_path)
         except Exception as e:
-            await status_msg.edit_text(f"❌ Dumaloq qilishda xatolik: {e}", parse_mode="HTML")
+            err_circ = (
+                f"❌ Dumaloq qilishda xatolik: {e}" if lang == "uz" else
+                (f"❌ Ошибка при конвертации в кружок: {e}" if lang == "ru" else
+                 f"❌ Error converting to video note: {e}")
+            )
+            await status_msg.edit_text(err_circ, parse_mode="HTML")
 
 
 @router.message(F.photo)
 async def handle_photo_message(message: Message):
     """Rasm qabul qilinganda uni AI ga yuborish"""
     user_id = message.from_user.id
+    lang = get_user_lang(user_id)
     caption = message.caption or ""
 
-    status_msg = await message.reply("🤔 <i>Rasm tahlil qilinmoqda...</i>", parse_mode="HTML")
+    wait_photo = (
+        "🤔 <i>Rasm tahlil qilinmoqda...</i>" if lang == "uz" else
+        ("🤔 <i>Анализ изображения...</i>" if lang == "ru" else
+         "🤔 <i>Analyzing image...</i>")
+    )
+    status_msg = await message.reply(wait_photo, parse_mode="HTML")
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     try:
@@ -1920,9 +2257,14 @@ async def handle_photo_message(message: Message):
         await message.bot.download_file(file_info.file_path, destination=photo_bytes_io)
         photo_bytes = photo_bytes_io.getvalue()
 
+        default_prompt = (
+            "Ushbu rasmni chuqur tahlil qiling va nimalar aks etganini yozing." if lang == "uz" else
+            ("Проведите глубокий анализ этого изображения и подробно опишите, что на нем изображено." if lang == "ru" else
+             "Analyze this image in detail and describe everything shown.")
+        )
         response = await ai_service.ask_gemini(
             user_id=user_id,
-            prompt=caption or "Ushbu rasmni chuqur tahlil qiling va nimalar aks etganini yozing.",
+            prompt=caption or default_prompt,
             image_bytes=photo_bytes,
             mime_type="image/jpeg"
         )
@@ -1931,18 +2273,24 @@ async def handle_photo_message(message: Message):
         except Exception:
             pass
 
+        title_img = "Rasm tahlili" if lang == "uz" else ("Анализ изображения" if lang == "ru" else "Image Analysis")
         res_id = store_result(
-            title="Rasm tahlili",
+            title=title_img,
             content=response,
             user_name=message.from_user.full_name or "Foydalanuvchi",
             user_id=user_id,
             category="image"
         )
-        await send_ai_response(message, response, res_id=res_id)
+        await send_ai_response(message, response, res_id=res_id, lang=lang)
 
     except Exception as e:
         logger.exception(f"Rasmni tahlil qilishda xatolik: {e}")
-        await status_msg.edit_text("❌ Rasmni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
+        err_photo = (
+            "❌ Rasmni tahlil qilishda xatolik yuz berdi." if lang == "uz" else
+            ("❌ Ошибка при анализе изображения." if lang == "ru" else
+             "❌ Error analyzing image.")
+        )
+        await status_msg.edit_text(err_photo, parse_mode="HTML")
 
 
 # =====================================================================
@@ -2072,7 +2420,12 @@ async def handle_text_message(message: Message):
     # 3. Rejim: SLIDES (Prezentatsiya)
     if current_mode == "SLIDES":
         lang = get_user_lang(user_id)
-        status_msg = await message.reply("📽 <i>Taqdimot slaydlari rejalashtirilmoqda va PowerPoint (.pptx) fayli yaratilmoqda...</i>", parse_mode="HTML")
+        status_msg = await message.reply(
+            "📽 <i>Taqdimot slaydlari rejalashtirilmoqda va PowerPoint (.pptx) fayli yaratilmoqda...</i>" if lang == "uz" else
+            ("📽 <i>Формирование слайдов и создание файла PowerPoint (.pptx)...</i>" if lang == "ru" else
+             "📽 <i>Planning slides and creating PowerPoint (.pptx) file...</i>"),
+            parse_mode="HTML"
+        )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
         slides_text = await ai_service.format_for_presentation(user_id=user_id, text=text)
@@ -2082,11 +2435,21 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title=f"Prezentatsiya: {text[:30]}", content=slides_text, user_name=user_name, user_id=user_id, category="slides")
+        title_slides = (
+            f"Prezentatsiya: {text[:30]}" if lang == "uz" else
+            (f"Презентация: {text[:30]}" if lang == "ru" else
+             f"Presentation: {text[:30]}")
+        )
+        res_id = store_result(title=title_slides, content=slides_text, user_name=user_name, user_id=user_id, category="slides")
+        caption_pptx = (
+            f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {text[:45]}</i>" if lang == "uz" else
+            (f"📽 <b>Ваша презентация PowerPoint готова!</b>\n<i>Тема: {text[:45]}</i>" if lang == "ru" else
+             f"📽 <b>Your PowerPoint presentation is ready!</b>\n<i>Topic: {text[:45]}</i>")
+        )
         try:
             await message.answer_document(
                 document=FSInputFile(pptx_path, filename=f"Prezentatsiya_{res_id}.pptx"),
-                caption=f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {text[:45]}</i>",
+                caption=caption_pptx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -2098,7 +2461,12 @@ async def handle_text_message(message: Message):
     # 4. Rejim: OFFICE_DOCS (Word, PDF, Excel)
     if current_mode == "OFFICE_DOCS":
         lang = get_user_lang(user_id)
-        status_msg = await message.reply("📊 <i>Ma'lumotlar qayta ishlanmoqda va hujjatlar tayyorlanmoqda...</i>", parse_mode="HTML")
+        status_msg = await message.reply(
+            "📊 <i>Ma'lumotlar qayta ishlanmoqda va hujjatlar tayyorlanmoqda...</i>" if lang == "uz" else
+            ("📊 <i>Обработка данных и подготовка документов...</i>" if lang == "ru" else
+             "📊 <i>Processing data and preparing documents...</i>"),
+            parse_mode="HTML"
+        )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
         docx_path = generate_docx(title=text[:35], content=text, user_name=user_name)
@@ -2111,21 +2479,37 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
-        res_id = store_result(title=text[:30], content=text, user_name=user_name, user_id=user_id, category="office")
+        title_office = (
+            text[:30] if text else
+            ("Hujjatlar to'plami" if lang == "uz" else ("Пакет документов" if lang == "ru" else "Document package"))
+        )
+        res_id = store_result(title=title_office, content=text, user_name=user_name, user_id=user_id, category="office")
+        caption_docx = (
+            "📄 <b>Word formati (.docx)</b>" if lang == "uz" else
+            ("📄 <b>Формат Word (.docx)</b>" if lang == "ru" else "📄 <b>Word format (.docx)</b>")
+        )
+        caption_pdf = (
+            "📑 <b>PDF formati (.pdf)</b>" if lang == "uz" else
+            ("📑 <b>Формат PDF (.pdf)</b>" if lang == "ru" else "📑 <b>PDF format (.pdf)</b>")
+        )
+        caption_xlsx = (
+            "📊 <b>Excel jadvali (.xlsx)</b>" if lang == "uz" else
+            ("📊 <b>Таблица Excel (.xlsx)</b>" if lang == "ru" else "📊 <b>Excel spreadsheet (.xlsx)</b>")
+        )
         try:
             await message.answer_document(
                 document=FSInputFile(docx_path, filename=f"Hujjat_{res_id}.docx"),
-                caption="📄 <b>Word formati (.docx)</b>",
+                caption=caption_docx,
                 parse_mode="HTML"
             )
             await message.answer_document(
                 document=FSInputFile(pdf_path, filename=f"Hujjat_{res_id}.pdf"),
-                caption="📑 <b>PDF formati (.pdf)</b>",
+                caption=caption_pdf,
                 parse_mode="HTML"
             )
             await message.answer_document(
                 document=FSInputFile(xlsx_path, filename=f"Jadval_{res_id}.xlsx"),
-                caption="📊 <b>Excel jadvali (.xlsx)</b>",
+                caption=caption_xlsx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
             )
@@ -2176,7 +2560,12 @@ async def handle_text_message(message: Message):
             )
             return
 
-        status_msg = await message.reply("📑 <i>Hujjat matni tahlil qilinmoqda...</i>", parse_mode="HTML")
+        status_msg = await message.reply(
+            "📑 <i>Hujjat matni tahlil qilinmoqda...</i>" if lang == "uz" else
+            ("📑 <i>Анализ текста документа...</i>" if lang == "ru" else
+             "📑 <i>Analyzing document text...</i>"),
+            parse_mode="HTML"
+        )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
         analysis = await ai_service.analyze_document(user_id=user_id, doc_text=text, filename="Matnli Hujjat", lang=lang)
@@ -2189,13 +2578,19 @@ async def handle_text_message(message: Message):
             await message.answer(analysis, parse_mode="HTML")
             return
 
-        res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name, user_id=user_id, category="doc")
+        title_doc = "Hujjat tahlili" if lang == "uz" else ("Анализ документа" if lang == "ru" else "Document Analysis")
+        res_id = store_result(title=title_doc, content=analysis, user_name=user_name, user_id=user_id, category="doc")
         await send_ai_response(message, analysis, res_id=res_id, lang=lang)
         return
 
     # 6. Rejim: AI_CHAT yoki oddiy suhbat
     lang = get_user_lang(user_id)
-    status_msg = await message.reply("🤔 <i>O'ylamoqda...</i>", parse_mode="HTML")
+    status_msg = await message.reply(
+        "🤔 <i>O'ylamoqda...</i>" if lang == "uz" else
+        ("🤔 <i>Думает...</i>" if lang == "ru" else
+         "🤔 <i>Thinking...</i>"),
+        parse_mode="HTML"
+    )
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     response = await ai_service.ask_gemini(user_id=user_id, prompt=text)
@@ -2214,7 +2609,14 @@ async def handle_text_message(message: Message):
 
 async def process_instagram_download(message: Message, url: str):
     """Instagram videosini yuklash jarayoni"""
-    status_msg = await message.reply("⏳ <i>Instagram video yuklab olinmoqda, iltimos kuting...</i>", parse_mode="HTML")
+    user_id = message.from_user.id
+    lang = get_user_lang(user_id)
+    wait_insta = (
+        "⏳ <i>Instagram video yuklab olinmoqda, iltimos kuting...</i>" if lang == "uz" else
+        ("⏳ <i>Скачивание видео из Instagram, пожалуйста подождите...</i>" if lang == "ru" else
+         "⏳ <i>Downloading Instagram video, please wait...</i>")
+    )
+    status_msg = await message.reply(wait_insta, parse_mode="HTML")
     file_path = None
     try:
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_VIDEO)
@@ -2223,8 +2625,9 @@ async def process_instagram_download(message: Message, url: str):
 
         bot_info = await message.bot.get_me()
         caption = (
-            f"🎬 <b>{video_data['title']}</b>\n\n"
-            f"🤖 <i>@{bot_info.username} orqali yuklandi</i>"
+            f"🎬 <b>{video_data['title']}</b>\n\n🤖 <i>@{bot_info.username} orqali yuklandi</i>" if lang == "uz" else
+            (f"🎬 <b>{video_data['title']}</b>\n\n🤖 <i>Загружено через @{bot_info.username}</i>" if lang == "ru" else
+             f"🎬 <b>{video_data['title']}</b>\n\n🤖 <i>Downloaded via @{bot_info.username}</i>")
         )
 
         video_file = FSInputFile(file_path)
@@ -2236,7 +2639,7 @@ async def process_instagram_download(message: Message, url: str):
             width=video_data.get('width'),
             height=video_data.get('height'),
             supports_streaming=True,
-            reply_markup=get_video_options_keyboard(file_path)
+            reply_markup=get_video_options_keyboard(file_path, lang=lang)
         )
 
         try:
@@ -2245,14 +2648,34 @@ async def process_instagram_download(message: Message, url: str):
             pass
 
     except FileTooLargeError as e:
-        await status_msg.edit_text(f"❌ <b>Hajm bo'yicha cheklov:</b>\n{str(e)}", parse_mode="HTML")
+        err_large = (
+            f"❌ <b>Hajm bo'yicha cheklov:</b>\n{str(e)}" if lang == "uz" else
+            (f"❌ <b>Ограничение по размеру:</b>\n{str(e)}" if lang == "ru" else
+             f"❌ <b>Size limit:</b>\n{str(e)}")
+        )
+        await status_msg.edit_text(err_large, parse_mode="HTML")
     except PrivateMediaError as e:
-        await status_msg.edit_text(f"🔒 <b>Yopiq hisob:</b>\n{str(e)}", parse_mode="HTML")
-    except DownloadException as e:
-        await status_msg.edit_text("❌ <b>Xatolik yuz berdi:</b>\nVideoni yuklab bo'lmadi.", parse_mode="HTML")
+        err_priv = (
+            f"🔒 <b>Yopiq hisob:</b>\n{str(e)}" if lang == "uz" else
+            (f"🔒 <b>Закрытый аккаунт:</b>\n{str(e)}" if lang == "ru" else
+             f"🔒 <b>Private account:</b>\n{str(e)}")
+        )
+        await status_msg.edit_text(err_priv, parse_mode="HTML")
+    except DownloadException:
+        err_down = (
+            "❌ <b>Xatolik yuz berdi:</b>\nVideoni yuklab bo'lmadi." if lang == "uz" else
+            ("❌ <b>Произошла ошибка:</b>\nНе удалось скачать видео." if lang == "ru" else
+             "❌ <b>Error:</b>\nCould not download video.")
+        )
+        await status_msg.edit_text(err_down, parse_mode="HTML")
     except Exception as e:
         logger.exception(f"Kutilmagan xatolik: {e}")
-        await status_msg.edit_text("❌ Texnik xatolik yuz berdi.", parse_mode="HTML")
+        err_tech = (
+            "❌ Texnik xatolik yuz berdi." if lang == "uz" else
+            ("❌ Произошла техническая ошибка." if lang == "ru" else
+             "❌ Technical error occurred.")
+        )
+        await status_msg.edit_text(err_tech, parse_mode="HTML")
     finally:
         # Faylni darhol o'chirmaymiz, foydalanuvchi "audio ajratish" tugmasini bosishi mumkin (yoki 10 daqiqadan keyin tozalanadi)
         pass
