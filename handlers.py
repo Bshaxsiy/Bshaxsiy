@@ -61,6 +61,9 @@ pending_audio: dict[str, dict] = {}
 # Bo'limlarga o'tkazish va tahrirlash uchun natijalar kesh xotirasi (res_id -> {title, content, user_name})
 result_store: dict[str, dict] = {}
 
+# Hujjat yuklanganda bo'lim tanlashni kutish: doc_id -> {user_id, user_name, filename, text, sections, caption, created_at}
+pending_docs: dict[str, dict] = {}
+
 
 def store_result(title: str, content: str, user_name: str = "") -> str:
     """Natijani xotiraga saqlash va res_id qaytarish"""
@@ -129,6 +132,50 @@ def get_content_actions_keyboard(res_id: str) -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def get_document_sections_keyboard(doc_id: str, sections: list) -> InlineKeyboardMarkup:
+    """Hujjat yuklanganda qaysi bo'limni tahlil qilishni tanlash klaviaturasi"""
+    kb = []
+    # Aniqlangan asosiy bo'limlar (har biri alohida qatorda)
+    for idx, sec in enumerate(sections[:5]):
+        clean_name = sec[:38]
+        kb.append([
+            InlineKeyboardButton(text=f"📌 {clean_name}", callback_data=f"doc_sec:{doc_id}:{idx}")
+        ])
+
+    # Standart umumiy va tahliliy yo'nalishlar
+    kb.append([
+        InlineKeyboardButton(text="🌐 Barcha bo'limlar (To'liq tahlil)", callback_data=f"doc_sec:{doc_id}:all")
+    ])
+    kb.append([
+        InlineKeyboardButton(text="⚖️ Huquqlar va amaliy xavflar", callback_data=f"doc_sec:{doc_id}:risks"),
+        InlineKeyboardButton(text="⏱ Muddatlar va jarimalar", callback_data=f"doc_sec:{doc_id}:deadlines")
+    ])
+    kb.append([
+        InlineKeyboardButton(text="✍️ O'z savolim / Boshqa bo'limni yozish", callback_data=f"doc_sec:{doc_id}:custom")
+    ])
+    kb.append([
+        InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"doc_sec:{doc_id}:cancel")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_document_result_keyboard(res_id: str, doc_id: str = "", current_sec_idx: Optional[int] = None, has_next: bool = False) -> InlineKeyboardMarkup:
+    """Hujjat tahlili natijasi tagidagi tugmalar: formatlar, keyingi bo'lim va qayta tanlash"""
+    kb = [
+        [
+            InlineKeyboardButton(text="📂 Bo'limga o'tkazish", callback_data=f"act:tr:{res_id}"),
+            InlineKeyboardButton(text="✏️ Tahrirlash", callback_data=f"act:ed:{res_id}")
+        ]
+    ]
+    if doc_id:
+        nav_row = []
+        if has_next and current_sec_idx is not None:
+            nav_row.append(InlineKeyboardButton(text="⏩ Keyingi bo'limni tahlil qilish", callback_data=f"doc_sec:{doc_id}:next:{current_sec_idx + 1}"))
+        nav_row.append(InlineKeyboardButton(text="📑 Boshqa bo'lim tanlash", callback_data=f"doc_sec:{doc_id}:menu"))
+        kb.append(nav_row)
+    return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
 def get_transfer_keyboard(res_id: str) -> InlineKeyboardMarkup:
@@ -225,19 +272,24 @@ def save_gemini_key_to_env(key: str):
     env_path.write_text(content, encoding="utf-8")
 
 
-async def send_ai_response(message: Message, response_text: str, res_id: Optional[str] = None):
+async def send_ai_response(
+    message: Message,
+    response_text: str,
+    res_id: Optional[str] = None,
+    reply_markup: Optional[InlineKeyboardMarkup] = None
+):
     """Javobni xavfsiz formatda va harakat tugmalari bilan jo'natish"""
     if not response_text:
         await message.reply("Javob bo'sh qaytdi.")
         return
 
-    reply_markup = get_content_actions_keyboard(res_id) if res_id else None
+    markup = reply_markup if reply_markup else (get_content_actions_keyboard(res_id) if res_id else None)
     max_len = 4000
     chunks = [response_text[i:i + max_len] for i in range(0, len(response_text), max_len)]
 
     for idx, chunk in enumerate(chunks):
         is_last = (idx == len(chunks) - 1)
-        current_markup = reply_markup if is_last else None
+        current_markup = markup if is_last else None
         try:
             await message.answer(chunk, parse_mode="Markdown", reply_markup=current_markup)
         except TelegramBadRequest:
@@ -441,14 +493,15 @@ async def handle_setkey(message: Message):
 @router.message(F.document)
 async def handle_document_upload(message: Message):
     """
-    Foydalanuvchi hujjat (PDF, Word, Excel, TXT va h.k.) yuborganida uni tahlil qilish
+    Foydalanuvchi hujjat (PDF, Word, Excel, TXT va h.k.) yuborganida:
+    Uni yuklab olib, bo'limlarini aniqlash va qaysi bo'limni tahlil qilishni so'rash!
     """
     user_id = message.from_user.id
     doc = message.document
     filename = doc.file_name or "hujjat.pdf"
     caption = message.caption or ""
 
-    status_msg = await message.reply(f"⏳ <i>'{filename}' hujjati yuklanmoqda va tahlil qilinmoqda...</i>", parse_mode="HTML")
+    status_msg = await message.reply(f"⏳ <i>«{filename}» qabul qilinmoqda va tahlil uchun tayyorlanmoqda...</i>", parse_mode="HTML")
     await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     unique_id = uuid.uuid4().hex[:8]
@@ -465,12 +518,31 @@ async def handle_document_upload(message: Message):
             await status_msg.edit_text("❌ Ushbu hujjatdan matn ajratib olib bo'lmadi yoki fayl bo'sh.", parse_mode="HTML")
             return
 
-        # AI orqali tahlil qilish
-        analysis = await ai_service.analyze_document(
-            user_id=user_id,
-            doc_text=extracted_text,
-            filename=filename,
-            custom_prompt=caption
+        # Bo'limlarni aniqlash
+        doc_id = uuid.uuid4().hex[:8]
+        sections = await ai_service.detect_document_sections(extracted_text, filename)
+
+        pending_docs[doc_id] = {
+            "user_id": user_id,
+            "user_name": message.from_user.full_name if message.from_user else "Foydalanuvchi",
+            "filename": filename,
+            "text": extracted_text,
+            "sections": sections,
+            "caption": caption,
+            "created_at": datetime.now()
+        }
+
+        # Keshni nazorat qilish
+        if len(pending_docs) > 100:
+            oldest = next(iter(pending_docs))
+            pending_docs.pop(oldest, None)
+
+        char_count = len(extracted_text)
+        prompt_text = (
+            f"📄 <b>«{filename}» muvaffaqiyatli qabul qilindi!</b>\n\n"
+            f"📊 <b>Hajmi:</b> taxminan {char_count:,} ta belgi matn\n"
+            f"🎯 <b>Ushbu hujjatning qaysi bo'limi yoki yo'nalishini tahlil qilishni xohlaysiz?</b>\n\n"
+            f"👇 <i>Quyidagi bo'limlardan birini tanlang yoki o'z maxsus so'rovingizni yozing:</i>"
         )
 
         try:
@@ -478,19 +550,153 @@ async def handle_document_upload(message: Message):
         except Exception:
             pass
 
-        title = f"{filename} tahlili"
-        res_id = store_result(title=title, content=analysis, user_name=message.from_user.full_name)
-        await send_ai_response(message, analysis, res_id=res_id)
+        await message.reply(
+            prompt_text,
+            parse_mode="HTML",
+            reply_markup=get_document_sections_keyboard(doc_id, sections)
+        )
 
     except Exception as e:
         logger.exception(f"Hujjat yuklashda xatolik: {e}")
-        await status_msg.edit_text("❌ Hujjatni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
+        await status_msg.edit_text("❌ Hujjatni qabul qilishda xatolik yuz berdi.", parse_mode="HTML")
     finally:
         if temp_path.exists():
             try:
                 temp_path.unlink()
             except Exception:
                 pass
+
+
+@router.callback_query(F.data.startswith("doc_sec:"))
+async def handle_document_section_callback(callback: CallbackQuery):
+    """
+    Hujjat bo'limini tanlash callbacki
+    Format: doc_sec:{doc_id}:{action_or_idx} yoki doc_sec:{doc_id}:next:{next_idx}
+    """
+    parts = callback.data.split(":")
+    if len(parts) < 3:
+        await callback.answer("Noto'g'ri so'rov!")
+        return
+
+    doc_id = parts[1]
+    action = parts[2]
+
+    doc_data = pending_docs.get(doc_id)
+    if not doc_data:
+        await callback.answer("Hujjat ma'lumotlari xotirada eskirgan. Iltimos, faylni qayta yuboring.", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    filename = doc_data["filename"]
+    text = doc_data["text"]
+    sections = doc_data.get("sections", [])
+    user_name = doc_data.get("user_name", "Foydalanuvchi")
+
+    if action == "cancel":
+        pending_docs.pop(doc_id, None)
+        await callback.answer("Bekor qilindi.")
+        try:
+            await callback.message.edit_text("❌ Hujjat tahlili bekor qilindi.", parse_mode="HTML")
+        except Exception:
+            pass
+        return
+
+    if action == "menu":
+        await callback.answer("Bo'limlar ro'yxati:")
+        char_count = len(text)
+        prompt_text = (
+            f"📄 <b>«{filename}» hujjati</b>\n\n"
+            f"📊 <b>Hajmi:</b> taxminan {char_count:,} belgi\n"
+            f"🎯 <b>Qaysi bo'limni tahlil qilishni xohlaysiz?</b>"
+        )
+        try:
+            await callback.message.edit_text(
+                prompt_text,
+                parse_mode="HTML",
+                reply_markup=get_document_sections_keyboard(doc_id, sections)
+            )
+        except Exception:
+            await callback.message.answer(
+                prompt_text,
+                parse_mode="HTML",
+                reply_markup=get_document_sections_keyboard(doc_id, sections)
+            )
+        return
+
+    if action == "custom":
+        user_active_mode[user_id] = f"DOC_CUSTOM:{doc_id}"
+        await callback.answer("O'z so'rovingizni yozing:")
+        custom_msg = (
+            f"✍️ <b>«{filename}» bo'yicha aniq so'rov:</b>\n\n"
+            "Iltimos, hujjatning qaysi moddasi, bo'limi yoki mavzusi bo'yicha tahlil kerakligini yozib yuboring.\n\n"
+            "<i>(Masalan: «22-moddadan 38-moddagacha bo'lgan qismini tahlil qilib ber» yoki «Mol-mulkni xatlash va auksion qoidalari»)</i>"
+        )
+        await callback.message.answer(custom_msg, parse_mode="HTML")
+        return
+
+    # Bo'lim nomini aniqlash
+    current_sec_idx = None
+    has_next = False
+
+    if action == "next" and len(parts) >= 4 and parts[3].isdigit():
+        current_sec_idx = int(parts[3])
+        if 0 <= current_sec_idx < len(sections):
+            section_title = sections[current_sec_idx]
+            has_next = (current_sec_idx + 1 < len(sections))
+        else:
+            section_title = "Yakuniy qism va xulosalar"
+            has_next = False
+    elif action.isdigit():
+        current_sec_idx = int(action)
+        if 0 <= current_sec_idx < len(sections):
+            section_title = sections[current_sec_idx]
+            has_next = (current_sec_idx + 1 < len(sections))
+        else:
+            section_title = "Tanlangan bo'lim"
+            has_next = False
+    elif action == "all":
+        section_title = "Barcha bo'limlar bo'yicha to'liq va umumiy amaliy tahlil"
+    elif action == "risks":
+        section_title = "Taraflarning huquqlari, majburiyatlari va amaliy yuridik xavflar"
+    elif action == "deadlines":
+        section_title = "Qat'iy muddatlar, moliyaviy raqamlar, jarimalar va javobgarlik"
+    else:
+        section_title = action
+
+    await callback.answer("Tahlil boshlanmoqda...")
+    status_msg = await callback.message.reply(
+        f"⏳ <b>«{section_title}»</b> bo'yicha chuqur tahlil tayyorlanmoqda...",
+        parse_mode="HTML"
+    )
+    await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+
+    try:
+        analysis = await ai_service.analyze_document_section(
+            user_id=user_id,
+            doc_text=text,
+            filename=filename,
+            section_name=section_title,
+            custom_prompt=doc_data.get("caption")
+        )
+
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+        title = f"{filename}: {section_title[:30]}"
+        res_id = store_result(title=title, content=analysis, user_name=user_name)
+        result_markup = get_document_result_keyboard(
+            res_id=res_id,
+            doc_id=doc_id,
+            current_sec_idx=current_sec_idx,
+            has_next=has_next
+        )
+        await send_ai_response(callback.message, analysis, res_id=res_id, reply_markup=result_markup)
+
+    except Exception as e:
+        logger.exception(f"Bo'lim tahlilida xatolik: {e}")
+        await status_msg.edit_text("❌ Bo'limni tahlil qilishda xatolik yuz berdi.", parse_mode="HTML")
 
 
 # =====================================================================
@@ -589,7 +795,7 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
             try:
                 await callback.message.answer_document(
                     document=FSInputFile(docx_path, filename=f"Audio_Tahlil_{audio_id}.docx"),
-                    caption="📄 <b>Audio xabar tahlili (Word hujjati)</b>\n<i>Tayyorlovchi: @Bshaxsiy_bot</i>",
+                    caption="📄 <b>Audio xabar tahlili (Word hujjati)</b>",
                     parse_mode="HTML"
                 )
             finally:
@@ -604,7 +810,7 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
             try:
                 await callback.message.answer_document(
                     document=FSInputFile(pdf_path, filename=f"Audio_Tahlil_{audio_id}.pdf"),
-                    caption="📑 <b>Audio xabar tahlili (PDF hujjati)</b>\n<i>Tayyorlovchi: @Bshaxsiy_bot</i>",
+                    caption="📑 <b>Audio xabar tahlili (PDF hujjati)</b>",
                     parse_mode="HTML"
                 )
             finally:
@@ -989,6 +1195,46 @@ async def handle_text_message(message: Message):
     current_mode = user_active_mode.get(user_id, "NORMAL")
     user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
 
+    # 0. Hujjat bo'yicha maxsus bo'lim/modda so'rovi (DOC_CUSTOM:{doc_id})
+    if current_mode.startswith("DOC_CUSTOM:"):
+        doc_id = current_mode.split(":", 1)[1]
+        doc_data = pending_docs.get(doc_id)
+        user_active_mode[user_id] = "NORMAL"
+
+        if doc_data:
+            filename = doc_data["filename"]
+            text_content = doc_data["text"]
+            user_name = doc_data.get("user_name", "Foydalanuvchi")
+            custom_query = text.strip()
+
+            status_msg = await message.reply(
+                f"⏳ <b>«{filename}»</b> hujjati bo'yicha <i>«{custom_query[:40]}»</i> talabi tahlil qilinmoqda...",
+                parse_mode="HTML"
+            )
+            await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+            try:
+                analysis = await ai_service.analyze_document_section(
+                    user_id=user_id,
+                    doc_text=text_content,
+                    filename=filename,
+                    section_name=custom_query
+                )
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+
+                title = f"{filename}: {custom_query[:25]}"
+                res_id = store_result(title=title, content=analysis, user_name=user_name)
+                result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False)
+                await send_ai_response(message, analysis, res_id=res_id, reply_markup=result_markup)
+                return
+            except Exception as e:
+                logger.exception(f"Maxsus so'rov tahlilida xatolik: {e}")
+                await status_msg.edit_text("❌ Tahlil jarayonida xatolik yuz berdi.", parse_mode="HTML")
+                return
+
     # 1. Instagram havolasi bo'lsa
     match = INSTAGRAM_URL_REGEX.search(text)
     if match:
@@ -1079,6 +1325,31 @@ async def handle_text_message(message: Message):
 
     # 5. Rejim: DOC_ANALYSIS (Matn shaklida tahlil so'ralsa)
     if current_mode == "DOC_ANALYSIS":
+        if len(text) > 1200:
+            doc_id = uuid.uuid4().hex[:8]
+            sections = await ai_service.detect_document_sections(text, "Matnli Hujjat")
+            pending_docs[doc_id] = {
+                "user_id": user_id,
+                "user_name": user_name,
+                "filename": "Matnli Hujjat",
+                "text": text,
+                "sections": sections,
+                "caption": "",
+                "created_at": datetime.now()
+            }
+            prompt_text = (
+                f"📄 <b>Matnli hujjat qabul qilindi!</b>\n\n"
+                f"📊 <b>Hajmi:</b> taxminan {len(text):,} ta belgi\n"
+                f"🎯 <b>Ushbu matnning qaysi bo'limi yoki yo'nalishini tahlil qilishni xohlaysiz?</b>\n\n"
+                f"👇 <i>Quyidagi bo'limlardan birini tanlang yoki o'z savolingizni yozing:</i>"
+            )
+            await message.reply(
+                prompt_text,
+                parse_mode="HTML",
+                reply_markup=get_document_sections_keyboard(doc_id, sections)
+            )
+            return
+
         status_msg = await message.reply("📑 <i>Hujjat matni tahlil qilinmoqda...</i>", parse_mode="HTML")
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 

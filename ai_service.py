@@ -1,7 +1,8 @@
 import io
 import os
+import re
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from google import genai
 from google.genai import types
@@ -13,13 +14,17 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = (
     "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz. "
     "Foydalanuvchi qaysi tilda yozsa (o'zbek, rus, ingliz va h.k.), xuddi shu tilda ravon va aniq javob bering. "
-    "Javoblarni chiroyli, tushunarli, tuzilmaviy formatda (kerak bo'lsa punktlar, kod bloklari bilan) taqdim eting. "
-    "Agar savol berilsa, to'liq va konstruktiv yordam bering."
+    "O'zbek tilidagi javoblarda qat'iy ravishda sof adabiy o'zbek tilidan foydalaning. "
+    "Imlo va grammatika qoidalariga 100% rioya qiling: barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) "
+    "aslo tushirib qoldirmasdan, to'liq yozing. Hech qanday keraksiz inglizcha so'zlar, atamalar yoki jargonlarni ishlatmang. "
+    "Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. "
+    "Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang."
 )
 
 DEEP_RESEARCH_PROMPT = (
-    "Siz xalqaro darajadagi bosh ilmiy va tahliliy izlanuvchisiz (Chief Research Analyst). "
+    "Siz xalqaro darajadagi bosh ilmiy va tahliliy izlanuvchisiz. "
     "Mavzu yoki savol bo'yicha eng yuqori darajada chuqur, mukammal, faktlarga asoslangan va tizimli hisobot tayyorlang.\n"
+    "Qat'iy ravishda sof adabiy o'zbek tilida, imlo va grammatika qoidalariga rioya qilib, har bir so'z va qo'shimchani to'liq bayon qiling.\n"
     "Hisobot tuzilishi:\n"
     "1. 📌 Kirish va Mavzuning Dolzarbligi\n"
     "2. 🔍 Chuqur Tahlil va Asosiy Mexanizmlar\n"
@@ -159,9 +164,14 @@ class AIService:
             )
             instruction = (
                 prompt.strip() if prompt else
-                "Foydalanuvchi ushbu audio xabarni yubordi. "
-                "Audio xabarni diqqat bilan eshiting va undagi savol yoki topshiriqqa to'liq, ravon va tushunarli javob bering. "
-                "Agar bu fikr yoki murojaat bo'lsa, xabarning mazmunini bayon qilib, tahliliy fikringizni bildiring."
+                "Foydalanuvchi ushbu audio xabarni yubordi.\n"
+                "Topshiriq:\n"
+                "1. Audio xabarni boshidan oxirigacha diqqat bilan eshiting va undagi barcha fikrlar, savollar hamda topshiriqlarni to'liq inobatga oling.\n"
+                "2. Audio xabarning oxiridagi gaplar yoki so'zlarni aslo tushirib qoldirmang, xulosani to'liq chiqaring.\n"
+                "3. Javobni sof, adabiy o'zbek tilida, imlo va grammatika qoidalariga 100% rioya qilib bering.\n"
+                "4. So'z oxiridagi barcha qo'shimchalar (-da, -dan, -ga, -ni, -ning, -lar, -dagi) to'liq va xatosiz yozilsin, harflar tushib qolmasin.\n"
+                "5. Javobda hech qanday keraksiz inglizcha so'z yoki jargon ishlatmang.\n"
+                "6. Agar foydalanuvchi murojaat yoki fikr bildirgan bo'lsa, xabar mazmunini to'liq ifodalab, ravon tahliliy xulosa bering."
             )
             response = await chat.send_message(message=[audio_part, instruction])
             if response and response.text:
@@ -209,9 +219,71 @@ class AIService:
             logger.exception(f"Deep Research xatoligi: {e}")
             return f"❌ <b>Deep Research xatoligi:</b> {e}"
 
-    async def analyze_document(self, user_id: int, doc_text: str, filename: str, custom_prompt: Optional[str] = None) -> str:
+    async def detect_document_sections(self, doc_text: str, filename: str) -> List[str]:
         """
-        Hujjat (PDF, Word, Excel, TXT) matnini tahlil qilish
+        Hujjatning asosiy bo'limlari, boblari, moddalari yoki mavzularini aniqlash
+        """
+        if not self.is_configured():
+            return [
+                "1. Umumiy qoidalar va asosiy tushunchalar",
+                "2. Huquqlar, majburiyatlar va tartib-taomillar",
+                "3. Moliyaviy shartlar, muddatlar va javobgarlik",
+                "4. Nizolar, bekor qilish va yakuniy qoidalar"
+            ]
+
+        if not self._client:
+            self._init_client()
+        if not self._client:
+            return [
+                "1. Umumiy qoidalar va asosiy tushunchalar",
+                "2. Huquqlar, majburiyatlar va tartib-taomillar",
+                "3. Moliyaviy shartlar, muddatlar va javobgarlik",
+                "4. Nizolar, bekor qilish va yakuniy qoidalar"
+            ]
+
+        prompt = (
+            f"Foydalanuvchi '{filename}' nomli hujjatni yubordi.\n"
+            "Ushbu hujjat matnining asosiy bo'limlari, boblari, moddalar guruhlari yoki asosiy qismlarini aniqlang.\n"
+            "Maksimal 3-5 ta eng muhim va tushunarli bo'lim nomini chiqaring (har bir bo'lim nomi 15-40 belgidan oshmasin).\n"
+            "Misol: '1–21-moddalar: Asosiy qoidalar' yoki '2. Moliyaviy shartlar va hisob-kitob'.\n"
+            "Faqat har bir bo'lim nomini alohida qatorda yozing. Hech qanday qo'shimcha so'z, izoh yoki kirish qismi yozmang.\n\n"
+            f"--- HUJJAT BOSHI ---\n{doc_text[:18000]}"
+        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=prompt
+            )
+            if response and response.text:
+                lines = [l.strip() for l in response.text.split("\n") if l.strip()]
+                cleaned = []
+                for line in lines:
+                    c = re.sub(r"^[\*\-•\d\.\)]+\s*", "", line).strip()
+                    c = c.replace("**", "").replace("`", "").strip()
+                    if 4 <= len(c) <= 60:
+                        cleaned.append(c)
+                if len(cleaned) >= 2:
+                    return cleaned[:5]
+        except Exception as e:
+            logger.warning(f"Bo'limlarni aniqlashda ogohlantirish: {e}")
+
+        return [
+            "1. Umumiy qoidalar va asosiy tushunchalar",
+            "2. Huquqlar, majburiyatlar va tartib-taomillar",
+            "3. Moliyaviy shartlar, muddatlar va javobgarlik",
+            "4. Nizolar, bekor qilish va yakuniy qoidalar"
+        ]
+
+    async def analyze_document_section(
+        self,
+        user_id: int,
+        doc_text: str,
+        filename: str,
+        section_name: str,
+        custom_prompt: Optional[str] = None
+    ) -> str:
+        """
+        Hujjatning tanlangan aniq bo'limi yoki yo'nalishi bo'yicha chuqur, amaliy va to'liq tahlil
         """
         if not self.is_configured():
             return "⚠️ Gemini API kaliti kiritilmagan!"
@@ -222,17 +294,22 @@ class AIService:
             return "❌ AI mijozi bilan bog'lanishda xatolik."
 
         doc_instruction = (
-            f"Foydalanuvchi '{filename}' nomli hujjatni tahlil qilish uchun yubordi.\n"
-            "Ushbu hujjat matnini tahlil qiling:\n"
-            "1. 📄 Hujjatning asosiy maqsadi va qisqacha mazmuni\n"
-            "2. 🔑 Eng muhim shartlar, qoidalar va bandlar\n"
-            "3. 🔢 Sanalar, raqamlar, tomonlar yoki moliyaviy ma'lumotlar\n"
-            "4. 💡 Xulosa, foydalanuvchi e'tibor berishi shart bo'lgan muhim nuqtalar\n\n"
+            f"Siz yuqori malakali bosh yurist, tahlilchi va amaliy maslahatchisiz.\n"
+            f"Foydalanuvchi '{filename}' nomli rasmiy hujjatni taqdim etdi va aynan quyidagi bo'lim / yo'nalish bo'yicha tahlil so'radi:\n"
+            f"🎯 TANLANGAN BO'LIM / YO'NALISH: «{section_name}»\n\n"
+            "Ushbu bo'lim bo'yicha tahlilni o'ta aniq, to'liq, ravon va amaliy ahamiyatini ko'rsatgan holda bayon qiling.\n"
+            "Tahlilda quyidagi bloklarni qat'iy yoriting:\n"
+            "1. 📌 Bo'limning asosiy maqsadi va hayotiy mohiyati (tushunarli va ravon tilda)\n"
+            "2. 🔑 Aniq qoidalar, mexanizmlar va qadamma-qadam harakatlar (amaliyotda kim nima qilishi shart)\n"
+            "3. ⏱ Sanalar, qat'iy muddatlar, summalar, chegaralar va sanktsiyalar (aniq raqamlar bilan)\n"
+            "4. ⚖️ Taraflarning huquqlari, majburiyatlari va yashirin xavflar (rad etish, jarima yoki xatoliklar)\n"
+            "5. 💡 Amaliy xulosa va tavsiyalar (foydalanuvchi o'z manfaatini himoya qilish uchun nimalarga e'tibor berishi shart)\n\n"
+            "Quruq nazariy ro'yxat emas, balki hayotda qo'llash mumkin bo'lgan aniq va to'liq qo'llanma tarzida yozing."
         )
         if custom_prompt:
-            doc_instruction += f"Foydalanuvchining qo'shimcha savoli: {custom_prompt}\n\n"
+            doc_instruction += f"\n\nFoydalanuvchining qo'shimcha aniq savoli/topshirig'i: {custom_prompt}\n"
 
-        prompt = f"{doc_instruction}\n--- HUJJAT MATNI ---\n{doc_text[:35000]}"
+        prompt = f"{doc_instruction}\n\n--- HUJJAT MATNI ---\n{doc_text[:85000]}"
 
         try:
             response = await self._client.aio.models.generate_content(
@@ -241,10 +318,22 @@ class AIService:
             )
             if response and response.text:
                 return response.text
-            return "Hujjat bo'yicha tahlil natijasi olinmadi."
+            return "Bo'lim bo'yicha tahlil natijasi olinmadi."
         except Exception as e:
-            logger.exception(f"Hujjat tahlili xatoligi: {e}")
-            return f"❌ <b>Hujjat tahlilida xatolik:</b> {e}"
+            logger.exception(f"Bo'lim tahlili xatoligi: {e}")
+            return f"❌ <b>Bo'lim tahlilida xatolik:</b> {e}"
+
+    async def analyze_document(self, user_id: int, doc_text: str, filename: str, custom_prompt: Optional[str] = None) -> str:
+        """
+        Hujjat (PDF, Word, Excel, TXT) matnini to'liq tahlil qilish
+        """
+        return await self.analyze_document_section(
+            user_id=user_id,
+            doc_text=doc_text,
+            filename=filename,
+            section_name="Butun hujjat bo'yicha to'liq va umumiy amaliy tahlil",
+            custom_prompt=custom_prompt
+        )
 
     async def refine_content(self, user_id: int, original_text: str, instruction: str) -> str:
         """

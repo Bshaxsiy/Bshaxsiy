@@ -72,10 +72,16 @@ def extract_text_from_file(file_path: str, filename: str) -> str:
         if ext == ".pdf":
             reader = pypdf.PdfReader(file_path)
             pages_text = []
-            for i, page in enumerate(reader.pages[:25]):  # Dastlabki 25 sahifa
+            max_pages = min(len(reader.pages), 100)
+            total_chars = 0
+            for i in range(max_pages):
+                page = reader.pages[i]
                 t = page.extract_text()
                 if t:
                     pages_text.append(f"--- Sahifa {i+1} ---\n{t.strip()}")
+                    total_chars += len(t)
+                    if total_chars > 120000:
+                        break
             text = "\n\n".join(pages_text)
 
         elif ext in (".docx", ".doc"):
@@ -92,18 +98,18 @@ def extract_text_from_file(file_path: str, filename: str) -> str:
             from openpyxl import load_workbook
             wb = load_workbook(file_path, data_only=True)
             sheet_texts = []
-            for sheet in wb.worksheets[:5]:
+            for sheet in wb.worksheets[:10]:
                 sheet_lines = [f"=== Varaq: {sheet.title} ==="]
                 for row in sheet.iter_rows(values_only=True):
                     row_vals = [str(v).strip() for v in row if v is not None]
                     if row_vals:
                         sheet_lines.append(" | ".join(row_vals))
-                sheet_texts.append("\n".join(sheet_lines[:100]))
+                sheet_texts.append("\n".join(sheet_lines[:150]))
             text = "\n\n".join(sheet_texts)
 
         elif ext in (".txt", ".csv", ".json", ".md", ".log"):
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                text = f.read(50000)
+                text = f.read(100000)
 
         else:
             text = f"Noma'lum format: {ext}"
@@ -112,6 +118,21 @@ def extract_text_from_file(file_path: str, filename: str) -> str:
         logger.exception(f"Fayldan matn olishda xatolik ({filename}): {e}")
         text = f"Faylni o'qishda xatolik yuz berdi: {str(e)[:150]}"
 
+    return text.strip()
+
+
+def clean_doc_text(text: str) -> str:
+    """Hujjatlar (Word, PDF, PPTX, Excel) uchun matnni tozalash: bot manzillari, <_>, <...>, va markdown belgilarini yo'qotish"""
+    if not text:
+        return ""
+    # Bot manzillari va imzolarini olib tashlash
+    text = re.sub(r"@Bshaxsiy_bot", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"Telegram\s*@\w+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"Tayyorlovchi:.*", "", text, flags=re.IGNORECASE)
+    # <_>, <br>, <hr> kabi xom teglarni olib tashlash
+    text = re.sub(r"<[^>]*>", "", text)
+    # Underscores va backticklarni tozalash
+    text = text.replace("_", "").replace("`", "")
     return text.strip()
 
 
@@ -131,44 +152,46 @@ def generate_docx(title: str, content: str, user_name: str = "") -> str:
         section.right_margin = Inches(1)
 
     # 1. Asosiy Sarlavha
+    clean_title = clean_doc_text(title) or "Hisobot va Tahlil"
     heading = doc.add_heading(level=1)
-    run_heading = heading.add_run(title or "Hisobot va Tahlil")
+    run_heading = heading.add_run(clean_title)
     run_heading.font.size = Pt(20)
     run_heading.font.bold = True
     run_heading.font.color.rgb = RGBColor(31, 78, 121)
     heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    # 2. Hujjat metama'lumotlari
-    meta_p = doc.add_paragraph()
-    time_str = datetime.now().strftime("%d.%m.%Y, %H:%M")
-    user_str = f" | Foydalanuvchi: {user_name}" if user_name else ""
-    meta_run = meta_p.add_run(f"📅 Sana: {time_str}{user_str} | 🤖 Tayyorlovchi: Telegram @Bshaxsiy_bot")
-    meta_run.font.size = Pt(9.5)
-    meta_run.font.italic = True
-    meta_run.font.color.rgb = RGBColor(128, 128, 128)
-
-    doc.add_paragraph("—" * 45)
-
-    # 3. Asosiy matn
+    # 2. Asosiy matn
     lines = content.split("\n")
     for raw_line in lines:
         line = raw_line.strip()
         if not line:
             continue
 
+        # Divider chiziqlarni o'tkazib yuborish
+        if re.match(r"^[\-_=—]{3,}\s*$", line):
+            continue
+
+        # <_> va teglarni tozalash
+        line = re.sub(r"<[^>]*>", "", line).strip()
+        if not line:
+            continue
+
         if line.startswith("### "):
             h = doc.add_heading(level=3)
-            r = h.add_run(line.replace("### ", "").strip())
+            clean_h = clean_doc_text(line.replace("### ", ""))
+            r = h.add_run(clean_h)
             r.font.size = Pt(13)
             r.font.color.rgb = RGBColor(46, 117, 182)
         elif line.startswith("## "):
             h = doc.add_heading(level=2)
-            r = h.add_run(line.replace("## ", "").strip())
+            clean_h = clean_doc_text(line.replace("## ", ""))
+            r = h.add_run(clean_h)
             r.font.size = Pt(15)
             r.font.color.rgb = RGBColor(31, 78, 121)
         elif line.startswith("# "):
             h = doc.add_heading(level=1)
-            r = h.add_run(line.replace("# ", "").strip())
+            clean_h = clean_doc_text(line.replace("# ", ""))
+            r = h.add_run(clean_h)
             r.font.size = Pt(16)
             r.font.color.rgb = RGBColor(31, 78, 121)
         elif re.match(r"^[\*\-•]\s+", line):
@@ -183,30 +206,26 @@ def generate_docx(title: str, content: str, user_name: str = "") -> str:
             p = doc.add_paragraph()
             _add_formatted_docx_runs(p, line)
 
-    # 4. Footer
-    doc.add_paragraph()
-    footer_p = doc.add_paragraph()
-    footer_run = footer_p.add_run("Ushbu hisobot Telegram @Bshaxsiy_bot tomonidan avtomatik yaratildi.")
-    footer_run.font.size = Pt(8.5)
-    footer_run.font.italic = True
-    footer_run.font.color.rgb = RGBColor(160, 160, 160)
-
     doc.save(str(filename))
     logger.info(f"Word hujjati yaratildi: {filename}")
     return str(filename)
 
 
 def _add_formatted_docx_runs(paragraph, text: str):
+    text = re.sub(r"<[^>]*>", "", text)
     parts = re.split(r"(\*\*.*?\*\*)", text)
     for part in parts:
         if part.startswith("**") and part.endswith("**"):
-            run = paragraph.add_run(part[2:-2])
-            run.bold = True
-            run.font.size = Pt(11)
+            clean_inner = part[2:-2].replace("*", "").replace("`", "").replace("_", "")
+            if clean_inner:
+                run = paragraph.add_run(clean_inner)
+                run.bold = True
+                run.font.size = Pt(11)
         else:
-            clean_part = part.replace("*", "").replace("`", "")
-            run = paragraph.add_run(clean_part)
-            run.font.size = Pt(11)
+            clean_part = part.replace("*", "").replace("`", "").replace("_", "")
+            if clean_part:
+                run = paragraph.add_run(clean_part)
+                run.font.size = Pt(11)
 
 
 def generate_pdf(title: str, content: str, user_name: str = "") -> str:
@@ -231,7 +250,6 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
 
     font_family = "Arial" if FONT_INITIALIZED else "Helvetica"
     font_bold = "Arial-Bold" if FONT_INITIALIZED else "Helvetica-Bold"
-    font_italic = "Arial-Italic" if FONT_INITIALIZED else "Helvetica-Oblique"
 
     title_style = ParagraphStyle(
         "ReportTitle",
@@ -239,16 +257,7 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
         fontSize=18,
         leading=22,
         textColor=colors.HexColor("#1F4E79"),
-        spaceAfter=6
-    )
-
-    meta_style = ParagraphStyle(
-        "ReportMeta",
-        fontName=font_italic,
-        fontSize=9,
-        leading=12,
-        textColor=colors.HexColor("#7F7F7F"),
-        spaceAfter=10
+        spaceAfter=14
     )
 
     h2_style = ParagraphStyle(
@@ -281,13 +290,8 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
     )
 
     story = []
-    story.append(Paragraph(title or "Hisobot va Tahlil", title_style))
-
-    time_str = datetime.now().strftime("%d.%m.%Y, %H:%M")
-    user_str = f" | Foydalanuvchi: {user_name}" if user_name else ""
-    meta_text = f"📅 Sana: {time_str}{user_str} | 🤖 Tayyorlovchi: Telegram @Bshaxsiy_bot"
-    story.append(Paragraph(meta_text, meta_style))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#D3D3D3"), spaceAfter=12))
+    clean_title = clean_doc_text(title) or "Hisobot va Tahlil"
+    story.append(Paragraph(clean_title, title_style))
 
     lines = content.split("\n")
     for raw_line in lines:
@@ -296,8 +300,18 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
             story.append(Spacer(1, 4))
             continue
 
+        # Divider chiziqlarni o'tkazib yuborish
+        if re.match(r"^[\-_=—]{3,}\s*$", line):
+            continue
+
+        # <_> va teglarni tozalash
+        line = re.sub(r"<[^>]*>", "", line).strip()
+        if not line:
+            continue
+
         escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         formatted_line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", escaped_line)
+        formatted_line = formatted_line.replace("_", "").replace("`", "")
 
         if line.startswith("#"):
             clean_h = re.sub(r"^#+\s*", "", formatted_line)
@@ -307,10 +321,6 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
             story.append(Paragraph(clean_b, bullet_style))
         else:
             story.append(Paragraph(formatted_line, body_style))
-
-    story.append(Spacer(1, 15))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#E0E0E0"), spaceAfter=6))
-    story.append(Paragraph("<i>Ushbu hisobot Telegram @Bshaxsiy_bot tomonidan avtomatik yaratildi.</i>", meta_style))
 
     doc.build(story)
     logger.info(f"PDF hujjati yaratildi: {filename}")
@@ -332,13 +342,11 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
     slide_title = slide.shapes.title
     slide_subtitle = slide.placeholders[1]
 
-    clean_title = re.sub(r"^#+\s*", "", title).replace("*", "").strip() or "Prezentatsiya"
+    clean_title = clean_doc_text(re.sub(r"^#+\s*", "", title)) or "Taqdimot"
     slide_title.text = clean_title
-    time_str = datetime.now().strftime("%d.%m.%Y")
-    slide_subtitle.text = f"{user_name + ' | ' if user_name else ''}{time_str}\nTayyorlovchi: @Bshaxsiy_bot"
+    slide_subtitle.text = "Tahliliy hisobot va taqdimot"
 
     # 2. Matnni slaydlar bo'yicha ajratish
-    # Matnda # yoki ## yoki Slayd so'zi bormi tekshiramiz
     sections: List[Dict[str, List[str]]] = []
     current_title = "Umumiy Ma'lumot"
     current_bullets: List[str] = []
@@ -349,15 +357,25 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
         if not line:
             continue
 
+        # Divider chiziqlarni o'tkazib yuborish
+        if re.match(r"^[\-_=—]{3,}\s*$", line):
+            continue
+
+        # <_> va teglarni tozalash
+        line = re.sub(r"<[^>]*>", "", line).strip()
+        if not line:
+            continue
+
         if line.startswith("#") or re.match(r"^(Slayd|Slide)\s*\d+[:\.]?", line, re.IGNORECASE):
             if current_bullets:
                 sections.append({"title": current_title, "bullets": current_bullets})
                 current_bullets = []
             clean_sec_title = re.sub(r"^(#+|Slayd\s*\d+[:\.]?|Slide\s*\d+[:\.]?)\s*", "", line, flags=re.IGNORECASE)
-            clean_sec_title = re.sub(r"[\*`]", "", clean_sec_title).strip()
+            clean_sec_title = clean_doc_text(clean_sec_title)
             current_title = clean_sec_title or "Reja va Tahlil"
         else:
-            clean_bullet = re.sub(r"^[\*\-•\d\.]+\s*", "", line).replace("*", "").replace("`", "").strip()
+            clean_bullet = re.sub(r"^[\*\-•\d\.]+\s*", "", line)
+            clean_bullet = clean_doc_text(clean_bullet)
             if clean_bullet:
                 current_bullets.append(clean_bullet)
 
@@ -366,7 +384,8 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
 
     # Agar bo'limlar 0 bo'lsa yoki bittagina bo'lsa, xatboshilarni 3-4 tadan slaydlarga taqsimlaymiz
     if len(sections) <= 1:
-        all_items = current_bullets if current_bullets else [l.strip() for l in lines if l.strip()]
+        all_items = current_bullets if current_bullets else [clean_doc_text(l) for l in lines if l.strip()]
+        all_items = [x for x in all_items if x]
         sections = []
         chunk_size = 4
         for i in range(0, len(all_items), chunk_size):
@@ -403,7 +422,7 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
     end_title = end_slide.shapes.title
     end_sub = end_slide.placeholders[1]
     end_title.text = "E'tiboringiz uchun rahmat!"
-    end_sub.text = "Savollar va muhokama\n@Bshaxsiy_bot orqali yaratildi"
+    end_sub.text = "Savollar va muhokama"
 
     prs.save(str(filename))
     logger.info(f"Prezentatsiya yaratildi: {filename}")
@@ -433,35 +452,28 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     thin_border_side = Side(border_style="thin", color="D9D9D9")
     thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
 
-    # Sarlavha qatori
+    # Sarlavha qatori (Metama'lumot va bot manzili olib tashlangan)
     ws.merge_cells("A1:D1")
     title_cell = ws["A1"]
-    title_cell.value = f"📊 {title or 'Hisobot va Maʼlumotlar Jadvali'}"
+    clean_title = clean_doc_text(title) or "Hisobot va Maʼlumotlar Jadvali"
+    title_cell.value = clean_title
     title_cell.font = Font(name="Arial", size=14, bold=True, color="1F4E79")
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[1].height = 28
 
-    # Metama'lumot
-    ws.merge_cells("A2:D2")
-    meta_cell = ws["A2"]
-    time_str = datetime.now().strftime("%d.%m.%Y, %H:%M")
-    meta_cell.value = f"Sana: {time_str} | Foydalanuvchi: {user_name or 'Hurmatli foydalanuvchi'} | Bot: @Bshaxsiy_bot"
-    meta_cell.font = Font(name="Arial", size=9, italic=True, color="7F7F7F")
-    ws.row_dimensions[2].height = 18
-
-    # Jadval sarlavhasi (Headers)
+    # Jadval sarlavhasi (Headers) - 3-qatordan boshlanadi
     headers = ["№", "Bo'lim / Mavzu", "Batafsil Tavsif / Ma'lumot", "Status / Izoh"]
     for col_idx, h_text in enumerate(headers, 1):
-        cell = ws.cell(row=4, column=col_idx, value=h_text)
+        cell = ws.cell(row=3, column=col_idx, value=h_text)
         cell.fill = navy_fill
         cell.font = header_font
         cell.alignment = center_align
         cell.border = thin_border
-    ws.row_dimensions[4].height = 24
+    ws.row_dimensions[3].height = 24
 
     # Matnni qatorlarga ajratish
     lines = content.split("\n")
-    row_num = 5
+    row_num = 4
     item_idx = 1
     current_category = "Asosiy tahlil"
 
@@ -469,13 +481,13 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     table_lines = [l.strip() for l in lines if "|" in l and not l.strip().startswith("|---")]
     if len(table_lines) >= 2:
         for t_line in table_lines:
-            cols = [c.strip() for c in t_line.strip("|").split("|")]
-            if cols:
+            cols = [clean_doc_text(c) for c in t_line.strip("|").split("|")]
+            if cols and any(cols):
                 c1 = ws.cell(row=row_num, column=1, value=item_idx)
                 c2 = ws.cell(row=row_num, column=2, value=cols[0] if len(cols) > 0 else "")
                 c3 = ws.cell(row=row_num, column=3, value=cols[1] if len(cols) > 1 else "")
                 c4 = ws.cell(row=row_num, column=4, value=cols[2] if len(cols) > 2 else "Mavjud")
-                
+
                 for c in (c1, c2, c3, c4):
                     c.font = data_font
                     c.border = thin_border
@@ -491,13 +503,13 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     else:
         for raw_line in lines:
             line = raw_line.strip()
-            if not line:
+            if not line or re.match(r"^[\-_=—]{3,}\s*$", line):
                 continue
 
             if line.startswith("#"):
-                current_category = re.sub(r"^#+\s*", "", line).replace("*", "").strip()[:40]
+                current_category = clean_doc_text(re.sub(r"^#+\s*", "", line))[:40]
             else:
-                clean_text = re.sub(r"^[\*\-•\d\.]+\s*", "", line).replace("*", "").replace("`", "").strip()
+                clean_text = clean_doc_text(re.sub(r"^[\*\-•\d\.]+\s*", "", line))
                 if len(clean_text) > 3:
                     c1 = ws.cell(row=row_num, column=1, value=item_idx)
                     c2 = ws.cell(row=row_num, column=2, value=current_category)
@@ -510,7 +522,8 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
                         if row_num % 2 == 0:
                             c.fill = alt_fill
                     c1.alignment = center_align
-                    c2.alignment = bold_font
+                    c2.font = bold_font
+                    c2.alignment = left_align
                     c3.alignment = left_align
                     c4.alignment = center_align
                     ws.row_dimensions[row_num].height = 24
