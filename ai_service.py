@@ -21,13 +21,13 @@ FALLBACK_MODELS = [
 ]
 
 SYSTEM_PROMPT = (
-    "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz. "
-    "Foydalanuvchi qaysi tilda yozsa (o'zbek, rus, ingliz va h.k.), xuddi shu tilda ravon va aniq javob bering. "
-    "O'zbek tilidagi javoblarda qat'iy ravishda sof adabiy o'zbek tilidan foydalaning. "
-    "Imlo va grammatika qoidalariga 100% rioya qiling: barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) "
-    "aslo tushirib qoldirmasdan, to'liq yozing. Hech qanday keraksiz inglizcha so'zlar, atamalar yoki jargonlarni ishlatmang. "
-    "Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. "
-    "Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang."
+    "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz.\n"
+    "QAT'IY TIL VA IMLO TALABLARI (LANGUAGE PURITY & GRAMMAR):\n"
+    "1. Foydalanuvchi yoki vazifa qaysi tilni talab qilsa (o'zbek, rus, ingliz), butun javobni 100% FAQAT VA FAQAT O'SHA TILDA bering.\n"
+    "2. TILLARNI ARALASHTIRISH QAT'IYAN MAN ETILADI: Agar so'rov rus tilida bo'lsa, birorta ham o'zbekcha so'z yoki qo'shimcha ishlatmang, barcha terminlarni to'liq rus tiliga tarjima qiling. Agar o'zbek tilida bo'lsa, ruscha yoki inglizcha so'zlarni aralashtirmang.\n"
+    "3. Imlo va grammatika qoidalariga 100% rioya qiling: barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) aslo tushirib qoldirmasdan, to'liq yozing.\n"
+    "4. Rus tilida: соблюдайте строгие правила русской орфографии, пунктуации и падежных окончаний, избегайте опечаток и калек.\n"
+    "5. Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang."
 )
 
 DEEP_RESEARCH_PROMPT = (
@@ -388,32 +388,50 @@ class AIService:
             ],
             "ru": [
                 "1. Общие положения и основные понятия",
-                "2. Права, обязанности и процедуры",
-                "3. Финансовые условия, сроки и ответственность",
+                "2. Права, обязанности и процедуры исполнения",
+                "3. Сроки, финансовые условия и ответственность",
                 "4. Разрешение споров и заключительные положения"
             ],
             "en": [
                 "1. General Provisions & Key Concepts",
-                "2. Rights, Obligations & Procedures",
-                "3. Financial Terms, Deadlines & Liability",
+                "2. Rights, Obligations & Enforcement Procedures",
+                "3. Deadlines, Financial Terms & Liability",
                 "4. Dispute Resolution & Final Clauses"
             ]
         }
 
-        lang_request = (
-            "Bo'lim nomlarini o'zbek tilida chiqaring."
-            if lang == "uz" else
-            ("Выведите названия разделов на русском языке." if lang == "ru" else "Output section titles in English.")
-        )
-
-        prompt = (
-            f"Foydalanuvchi '{filename}' nomli hujjatni yubordi.\n"
-            f"Ushbu hujjat matnining asosiy bo'limlari, boblari, moddalar guruhlari yoki asosiy qismlarini aniqlang.\n"
-            f"{lang_request}\n"
-            "Maksimal 3-5 ta eng muhim va tushunarli bo'lim nomini chiqaring (har bir bo'lim nomi 15-40 belgidan oshmasin).\n"
-            "Faqat har bir bo'lim nomini alohida qatorda yozing. Hech qanday qo'shimcha so'z, izoh yoki kirish qismi yozmang.\n\n"
-            f"--- HUJJAT BOSHI ---\n{doc_text[:18000]}"
-        )
+        if lang == "ru":
+            prompt = (
+                f"Пользователь предоставил документ «{filename}».\n"
+                "Определите 3-5 ключевых логических разделов, глав или групп статей этого документа.\n"
+                "🔴 КАТЕГОРИЧЕСКОЕ ТРЕБОВАНИЕ:\n"
+                "- Выведите ВСЕ названия разделов СТРОГО НА ЧИСТОМ РУССКОМ ЯЗЫКЕ (например: «Статьи 1–10: Общие положения и органы исполнения»).\n"
+                "- Категорически ЗАПРЕЩЕНО оставлять узбекские слова (например: «moddalar», «ijro», «bob» и т.д. — переводите как «статьи», «исполнение», «глава»).\n"
+                "- Каждое название раздела напишите с новой строки (длиной от 15 до 50 символов).\n"
+                "- Не добавляйте никаких вводных слов, пояснений или знаков нумерации.\n\n"
+                f"--- НАЧАЛО ДОКУМЕНТА ---\n{doc_text[:20000]}"
+            )
+        elif lang == "en":
+            prompt = (
+                f"The user provided the document '{filename}'.\n"
+                "Identify 3-5 key logical sections, chapters, or article groups in this document.\n"
+                "🔴 REQUIREMENT:\n"
+                "- Output all section titles STRICTLY IN PROFESSIONAL ENGLISH (e.g., «Articles 1–10: General Provisions & Enforcement Bodies»).\n"
+                "- Do not leave untranslated foreign words.\n"
+                "- Write each section title on a new line (15 to 50 characters).\n"
+                "- Do not add conversational filler or notes.\n\n"
+                f"--- DOCUMENT START ---\n{doc_text[:20000]}"
+            )
+        else:
+            prompt = (
+                f"Foydalanuvchi '{filename}' nomli hujjatni taqdim etdi.\n"
+                "Ushbu hujjat matnining 3-5 ta eng muhim mantiqiy bo'limlari, boblari yoki moddalar guruhlarini aniqlang.\n"
+                "🔴 TALAB:\n"
+                "- Barcha bo'lim nomlarini 100% SOF ADABIY O'ZBEK TILIDA, imlo xatolarisiz yozing.\n"
+                "- Har bir bo'lim nomini alohida qatorda yozing (15 dan 50 belgigacha).\n"
+                "- Hech qanday ortiqcha kirish yoki izoh yozmang.\n\n"
+                f"--- HUJJAT BOSHI ---\n{doc_text[:20000]}"
+            )
 
         try:
             res_text = await self.generate_content_with_fallback(
@@ -447,59 +465,69 @@ class AIService:
     ) -> str:
         """
         Hujjatning tanlangan aniq bo'limi bo'yicha chuqur, amaliy va to'liq tahlil.
-        Agar hujjat Rus yoki Ingliz tilida bo'lsa, tanlangan tilga (masalan, O'zbek)
-        to'g'ri, aniq, ravon va grammatik xatolarsiz tarjima qilib beradi.
+        Agar hujjat boshqa tilda bo'lsa, tanlangan tilga 100% to'liq, ravon va xatosiz tarjima qiladi.
+        Hech qanday tillar aralashuvi yoki imlo xatolariga yo'l qo'yilmaydi.
         """
         if lang == "ru":
-            lang_directive = (
-                "🔴 ВАЖНОЕ ТРЕБОВАНИЕ К ЯЗЫКУ И ПЕРЕВОДУ:\n"
-                "- Предоставьте анализ на 100% ЧИСТОМ, ЛИТЕРАТУРНОМ И ГРАММАТИЧЕСКИ БЕЗУПРЕЧНОМ РУССКОМ ЯЗЫКЕ.\n"
-                "- Независимо от того, на каком языке составлен исходный документ (узбекский, английский и др.), "
-                "точно и качественно переведите все положения на русский язык.\n"
-                "- Структура анализа:\n"
-                "1. 📌 Основная цель и практическая суть раздела\n"
-                "2. 🔑 Четкие правила, механизмы и пошаговые действия\n"
-                "3. ⏱ Сроки, даты, суммы, лимиты и санкции\n"
-                "4. ⚖️ Права, обязанности сторон и скрытые риски\n"
-                "5. 💡 Практические рекомендации и выводы"
+            doc_instruction = (
+                "Вы — ведущий юрисконсульт, главный аналитик и профессиональный переводчик высшей квалификации.\n"
+                f"Пользователь предоставил официальный документ «{filename}» и запросил исчерпывающий практический анализ раздела:\n"
+                f"🎯 ВЫБРАННЫЙ РАЗДЕЛ / НАПРАВЛЕНИЕ: «{section_name}»\n\n"
+                "🔴 КАТЕГОРИЧЕСКИЕ ТРЕБОВАНИЯ К ЯЗЫКУ И ОРФОГРАФИИ:\n"
+                "1. ВЕСЬ ТЕКСТ АНАЛИЗА ДОЛЖЕН БЫТЬ СТРОГО НА 100% ЧИСТОМ, БЕЗУПРЕЧНОМ ЛИТЕРАТУРНОМ РУССКОМ ЯЗЫКЕ.\n"
+                "2. Если документ составлен на узбекском или ином языке, ПОЛНОСТЬЮ ПЕРЕВЕДИТЕ ВСЕ термины, названия статей и понятий на русский язык.\n"
+                "   (Например: «moddalar» ➡️ «статьи», «Ijro etish organlari» ➡️ «Органы принудительного исполнения», «sud ijrochisi» ➡️ «судебный исполнитель», «undiruvchi» ➡️ «взыскатель», «qarzdor» ➡️ «должник»).\n"
+                "3. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО смешивать языки, оставлять узбекские слова или окончания в русском тексте.\n"
+                "4. Орфография, падежи и пунктуация должны быть абсолютно безошибочными.\n"
+                "5. Структура анализа (с четкими заголовками и эмодзи):\n"
+                "   📌 1. Основная цель, суть и сфера применения раздела\n"
+                "   🔑 2. Четкие правила, пошаговые действия и практические механизмы исполнения\n"
+                "   ⏱ 3. Сроки, критические даты, суммы, финансовые лимиты и ответственность\n"
+                "   ⚖️ 4. Права, обязанности сторон и скрытые юридические риски\n"
+                "   💡 5. Практические рекомендации и выводы для надежной защиты интересов\n\n"
+                "Пишите профессионально, логично, исчерпывающе и доступным языком, как готовое практическое руководство."
             )
+            if custom_prompt:
+                doc_instruction += f"\n\nТочный вопрос/запрос пользователя: {custom_prompt}\n"
         elif lang == "en":
-            lang_directive = (
-                "🔴 CRITICAL LANGUAGE & TRANSLATION REQUIREMENT:\n"
-                "- Provide the entire analysis in FLAWLESS, PROFESSIONAL, AND NATURAL ENGLISH.\n"
-                "- Regardless of the source language (Uzbek, Russian, etc.), accurately translate and interpret all provisions into English.\n"
-                "- Analysis structure:\n"
-                "1. 📌 Core objective and practical meaning of the section\n"
-                "2. 🔑 Concrete rules, mechanisms, and step-by-step actions required\n"
-                "3. ⏱ Dates, strict deadlines, monetary amounts, and penalties\n"
-                "4. ⚖️ Rights, obligations, and hidden liabilities\n"
-                "5. 💡 Actionable advice, safeguards, and conclusions"
+            doc_instruction = (
+                "You are a senior legal counsel, principal analyst, and certified translator.\n"
+                f"The user provided official document '{filename}' and requested a comprehensive practical analysis on:\n"
+                f"🎯 TARGET SECTION / TOPIC: «{section_name}»\n\n"
+                "🔴 STRICT LANGUAGE & GRAMMAR REQUIREMENTS:\n"
+                "1. THE ENTIRE RESPONSE MUST BE 100% IN FLAWLESS, PROFESSIONAL, AND NATURAL ENGLISH.\n"
+                "2. If the document is in Uzbek, Russian, or another language, FULLY TRANSLATE all terms, article names, and concepts into standard legal/business English.\n"
+                "3. DO NOT mix languages or leave untranslated foreign words.\n"
+                "4. Ensure perfect spelling, grammar, and consistent terminology.\n"
+                "5. Analysis structure:\n"
+                "   📌 1. Core Purpose & Practical Meaning\n"
+                "   🔑 2. Concrete Rules, Step-by-Step Mechanisms & Procedures\n"
+                "   ⏱ 3. Deadlines, Strict Dates, Monetary Amounts & Penalties\n"
+                "   ⚖️ 4. Rights, Obligations & Hidden Legal Risks\n"
+                "   💡 5. Actionable Advice & Strategic Safeguards\n\n"
+                "Provide an exhaustive, high-value, and perfectly structured guide."
             )
+            if custom_prompt:
+                doc_instruction += f"\n\nUser specific question/instruction: {custom_prompt}\n"
         else:
-            lang_directive = (
-                "🔴 O'TA MUHIM TIL VA TARJIMA TALABI:\n"
-                "- Tahlilni 100% SOF, ADABIY VA GRAMMATIK JIHATDAN MUKAMMAL O'ZBEK TILIDA bayon qiling.\n"
-                "- Agar hujjat RUS, INGLIZ yoki boshqa tilda bo'lsa, undagi barcha muhim bandlarni, shartlarni, "
-                "qoidalarni va xulosalarni O'ZBEK TILIGA TO'G'RI, ANIQ, RAVON VA GRAMMATIK XATOLARSIZ TARJIMA QILING va amaliy ma'nosini tushuntiring.\n"
-                "- Barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) "
-                "aslo tushirib qoldirmasdan, to'liq va xatosiz yozing.\n"
-                "- Tahlilda quyidagi bloklarni qat'iy yoriting:\n"
-                "1. 📌 Bo'limning asosiy maqsadi va hayotiy mohiyati (tushunarli va ravon tilda)\n"
-                "2. 🔑 Aniq qoidalar, mexanizmlar va qadamma-qadam harakatlar (amaliyotda kim nima qilishi shart)\n"
-                "3. ⏱ Sanalar, qat'iy muddatlar, summalar, chegaralar va sanktsiyalar (aniq raqamlar bilan)\n"
-                "4. ⚖️ Taraflarning huquqlari, majburiyatlari va yashirin xavflar (rad etish, jarima yoki xatoliklar)\n"
-                "5. 💡 Amaliy xulosa va tavsiyalar (foydalanuvchi o'z manfaatini himoya qilish uchun nimalarga e'tibor berishi shart)"
+            doc_instruction = (
+                "Siz yuqori malakali bosh yurist, tahlilchi va professional tarjimonsiz.\n"
+                f"Foydalanuvchi '{filename}' nomli rasmiy hujjatni taqdim etdi va aynan quyidagi bo'lim / yo'nalish bo'yicha tahlil so'radi:\n"
+                f"🎯 TANLANGAN BO'LIM / YO'NALISH: «{section_name}»\n\n"
+                "🔴 QAT'IY TIL VA IMLO TALABLARI:\n"
+                "1. Tahlilni 100% SOF, ADABIY VA GRAMMATIK JIHATDAN MUKAMMAL O'ZBEK TILIDA bayon qiling.\n"
+                "2. Agar hujjat RUS, INGLIZ yoki boshqa tilda bo'lsa, undagi barcha moddalar, bandlar, huquqiy va moliyaviy atamalarni O'ZBEK TILIGA TO'LIQ VA ANIQ TARJIMA QILING. Hech qanday so'zni ruscha yoki chala qoldirmang.\n"
+                "3. Barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) aslo tushirib qoldirmasdan, to'liq va imlo xatolarisiz yozing.\n"
+                "4. Tahlil tuzilishi (aniq sarlavhalar va belgilar bilan):\n"
+                "   📌 1. Bo'limning asosiy maqsadi va hayotiy mohiyati (tushunarli va ravon tilda)\n"
+                "   🔑 2. Aniq qoidalar, mexanizmlar va qadamma-qadam harakatlar (amaliyotda kim nima qilishi shart)\n"
+                "   ⏱ 3. Sanalar, qat'iy muddatlar, summalar, chegaralar va javobgarlik (aniq raqamlar bilan)\n"
+                "   ⚖️ 4. Taraflarning huquqlari, majburiyatlari va yashirin xavflar (rad etish, jarima yoki xatoliklar)\n"
+                "   💡 5. Amaliy xulosa va tavsiyalar (foydalanuvchi o'z manfaatini himoya qilish uchun nimalarga e'tibor berishi shart)\n\n"
+                "Quruq nazariy ro'yxat emas, balki amaliyotda to'liq qo'llanma tarzida yozing."
             )
-
-        doc_instruction = (
-            f"Siz yuqori malakali bosh yurist, tahlilchi va professional tarjimonsiz.\n"
-            f"Foydalanuvchi '{filename}' nomli rasmiy hujjatni taqdim etdi va aynan quyidagi bo'lim / yo'nalish bo'yicha tahlil so'radi:\n"
-            f"🎯 TANLANGAN BO'LIM / YO'NALISH: «{section_name}»\n\n"
-            f"{lang_directive}\n\n"
-            "Quruq nazariy ro'yxat emas, balki amaliyotda to'liq qo'llanma tarzida yozing."
-        )
-        if custom_prompt:
-            doc_instruction += f"\n\nFoydalanuvchining qo'shimcha aniq savoli/topshirig'i: {custom_prompt}\n"
+            if custom_prompt:
+                doc_instruction += f"\n\nFoydalanuvchining qo'shimcha aniq savoli/topshirig'i: {custom_prompt}\n"
 
         prompt = f"{doc_instruction}\n\n--- HUJJAT MATNI ---\n{doc_text[:85000]}"
 
@@ -538,50 +566,121 @@ class AIService:
         """
         Mavjud tahlil yoki matnni tahrirlash (kengaytirish, qisqartirish, formatlash)
         """
-        prompt = (
-            f"Siz professional matn muharriri va tahlilchisiz.\n"
-            f"Topshiriq: '{instruction}'.\n"
-            f"Til: {lang}.\n\n"
-            f"--- ASL MATN ---\n{original_text}\n\n"
-            f"Faqat yangilangan, to'liq va sayqallangan natijani bering."
-        )
+        if lang == "ru":
+            prompt = (
+                "Вы — профессиональный редактор текстов и аналитик высшей категории.\n"
+                f"Задача: {instruction}\n"
+                "🔴 ТРЕБОВАНИЕ: Результат должен быть на 100% чистом, грамотном русском языке без смешивания с другими языками.\n\n"
+                f"--- ИСХОДНЫЙ ТЕКСТ ---\n{original_text}\n\n"
+                "Предоставьте только отредактированный, чистый и отшлифованный результат."
+            )
+        elif lang == "en":
+            prompt = (
+                "You are an expert editor and senior analyst.\n"
+                f"Task: {instruction}\n"
+                "🔴 REQUIREMENT: Output strictly in 100% flawless English without mixing languages.\n\n"
+                f"--- ORIGINAL TEXT ---\n{original_text}\n\n"
+                "Return only the refined, polished text."
+            )
+        else:
+            prompt = (
+                "Siz professional matn muharriri va oliy toifali tahlilchisiz.\n"
+                f"Topshiriq: '{instruction}'.\n"
+                "🔴 TALAB: Natijani 100% sof adabiy o'zbek tilida, imlo xatolarisiz yozing.\n\n"
+                f"--- ASL MATN ---\n{original_text}\n\n"
+                "Faqat yangilangan, to'liq va sayqallangan natijani bering."
+            )
         return await self.generate_content_with_fallback(
             contents=prompt,
             timeout=40.0,
             operation_name="Matnni tahrirlash"
         )
 
-    async def format_for_presentation(self, user_id: int, text: str) -> str:
+    async def format_for_presentation(self, user_id: int, text: str, lang: str = "uz") -> str:
         """
-        Matnni PowerPoint slaydlariga mos struktura (# Slayd N:) ga aylantirish
+        Matnni PowerPoint slaydlariga mos struktura (# Slayd N:) ga aylantirish (tanlangan tilda)
         """
-        prompt = (
-            "Ushbu matn asosida PowerPoint taqdimoti uchun 5-7 ta slayd ssenariysini tuzing.\n"
-            "Har bir slaydni '## Slayd N: Sarlavha' shaklida boshlang va tagidan 3-4 ta muhim punkt ('* Punkt') yozing.\n\n"
-            f"--- MATN ---\n{text[:10000]}"
-        )
+        if lang == "ru":
+            prompt = (
+                "Вы — эксперт по созданию презентаций и визуальных докладов.\n"
+                "На основе следующего текста составьте профессиональный сценарий презентации PowerPoint из 5-7 слайдов.\n"
+                "🔴 КАТЕГОРИЧЕСКИЕ ТРЕБОВАНИЯ К ЯЗЫКУ:\n"
+                "- Весь текст должен быть на 100% ЧИСТОМ РУССКОМ ЯЗЫКЕ, без грамматических и орфографических ошибок.\n"
+                "- Категорически ЗАПРЕЩЕНО использовать узбекские или иностранные слова.\n"
+                "- Формат каждого слайда строго:\n"
+                "  ## Слайд N: Название слайда\n"
+                "  * Ключевой тезис или факт\n"
+                "  * Важное правило, срок или действие\n"
+                "  * Вывод или рекомендация\n\n"
+                f"--- МАТЕРИАЛ ДЛЯ ПРЕЗЕНТАЦИИ ---\n{text[:12000]}"
+            )
+        elif lang == "en":
+            prompt = (
+                "You are an expert presentation designer.\n"
+                "Based on the following text, create a professional 5-7 slide PowerPoint presentation structure.\n"
+                "🔴 LANGUAGE REQUIREMENT: 100% FLAWLESS ENGLISH.\n"
+                "- Format each slide strictly as:\n"
+                "  ## Slide N: Slide Title\n"
+                "  * Key takeaway or fact\n"
+                "  * Procedure, rule, or action\n"
+                "  * Practical outcome or recommendation\n\n"
+                f"--- SOURCE MATERIAL ---\n{text[:12000]}"
+            )
+        else:
+            prompt = (
+                "Ushbu matn asosida PowerPoint taqdimoti uchun 5-7 ta professional slayd ssenariysini tuzing.\n"
+                "🔴 TIL TALABI: 100% SOF ADABIY O'ZBEK TILI, imloviy xatolarsiz, hech qanday ruscha/inglizcha so'zlarsiz.\n"
+                "Har bir slaydni '## Slayd N: Sarlavha' shaklida boshlang va tagidan 3-4 ta muhim punkt ('* Punkt') yozing.\n\n"
+                f"--- MATN ---\n{text[:12000]}"
+            )
         res = await self.generate_content_with_fallback(
             contents=prompt,
             timeout=35.0,
-            operation_name="PowerPoint formatlash"
+            operation_name=f"PowerPoint formatlash ({lang})"
         )
         if res.startswith("⚠️") or res.startswith("❌"):
             return text
         return res
 
-    async def format_for_excel(self, user_id: int, text: str) -> str:
+    async def format_for_excel(self, user_id: int, text: str, lang: str = "uz") -> str:
         """
-        Matndagi ma'lumotlarni Excel jadvaliga mos Markdown table (| col1 | col2 | col3 |) ga aylantirish
+        Matndagi ma'lumotlarni Excel jadvaliga mos Markdown table (| col1 | col2 | col3 |) ga aylantirish (tanlangan tilda)
         """
-        prompt = (
-            "Ushbu ma'lumotlarni tartibli jadvalga aylantiring.\n"
-            "Jadvalni Markdown formatida tuzing (| № | Bo'lim / Parametr | Tavsif / Ma'lumot | Izoh |):\n\n"
-            f"--- MATN ---\n{text[:10000]}"
-        )
+        if lang == "ru":
+            prompt = (
+                "Преобразуйте предоставленные данные в аккуратную, структурированную таблицу Markdown.\n"
+                "🔴 ТРЕБОВАНИЯ К ЯЗЫКУ:\n"
+                "- 100% ЧИСТЫЙ РУССКИЙ ЯЗЫК, без орфографических ошибок и без смешивания с узбекским или иными языками.\n"
+                "- Заголовки таблицы строго в следующем формате:\n"
+                "| № | Раздел / Тема | Подробное описание / Данные | Статус / Примечание |\n"
+                "|---|---|---|---|\n"
+                "Заполните таблицу информативными строками (10-25 строк) на основе текста.\n\n"
+                f"--- ДАННЫЕ ---\n{text[:12000]}"
+            )
+        elif lang == "en":
+            prompt = (
+                "Convert the provided data into a neat, structured Markdown table.\n"
+                "🔴 LANGUAGE REQUIREMENT: 100% FLAWLESS ENGLISH.\n"
+                "Headers:\n"
+                "| № | Section / Topic | Detailed Description / Data | Status / Note |\n"
+                "|---|---|---|---|\n"
+                "Fill 10-25 rows based on the text.\n\n"
+                f"--- DATA ---\n{text[:12000]}"
+            )
+        else:
+            prompt = (
+                "Ushbu ma'lumotlarni tartibli va chiroyli jadvalga aylantiring.\n"
+                "🔴 TIL TALABI: 100% SOF ADABIY O'ZBEK TILI, imlo xatolarisiz.\n"
+                "Jadvalni Markdown formatida tuzing:\n"
+                "| № | Bo'lim / Parametr | Batafsil Tavsif / Ma'lumot | Holat / Izoh |\n"
+                "|---|---|---|---|\n"
+                "Matn asosida 10-25 qatordan iborat mazmunli jadval qiling.\n\n"
+                f"--- MATN ---\n{text[:12000]}"
+            )
         res = await self.generate_content_with_fallback(
             contents=prompt,
             timeout=35.0,
-            operation_name="Excel formatlash"
+            operation_name=f"Excel formatlash ({lang})"
         )
         if res.startswith("⚠️") or res.startswith("❌"):
             return text

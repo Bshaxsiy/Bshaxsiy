@@ -131,14 +131,17 @@ def clean_doc_text(text: str) -> str:
     text = re.sub(r"Tayyorlovchi:.*", "", text, flags=re.IGNORECASE)
     # <_>, <br>, <hr> kabi xom teglarni olib tashlash
     text = re.sub(r"<[^>]*>", "", text)
-    # Underscores va backticklarni tozalash
-    text = text.replace("_", "").replace("`", "")
-    return text.strip()
+    # Markdown italics _so'z_ ni tozalash va alohida tagchiziqlarni bo'shliqqa aylantirish
+    text = re.sub(r"(^|\s)_(.*?)_($|\s)", r"\1\2\3", text)
+    text = text.replace("_", " ").replace("`", "")
+    # Ortiqcha bo'shliqlarni tozalash
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    return text
 
 
-def generate_docx(title: str, content: str, user_name: str = "") -> str:
+def generate_docx(title: str, content: str, user_name: str = "", lang: str = "uz") -> str:
     """
-    Word (.docx) hujjati yaratish.
+    Word (.docx) hujjati yaratish (tanlangan tilda).
     """
     unique_id = uuid.uuid4().hex[:8]
     filename = DOWNLOADS_DIR / f"Hujjat_{unique_id}.docx"
@@ -152,7 +155,11 @@ def generate_docx(title: str, content: str, user_name: str = "") -> str:
         section.right_margin = Inches(1)
 
     # 1. Asosiy Sarlavha
-    clean_title = clean_doc_text(title) or "Hisobot va Tahlil"
+    default_title = (
+        "Hisobot va Tahlil" if lang == "uz" else
+        ("Аналитический отчет" if lang == "ru" else "Analytical Report")
+    )
+    clean_title = clean_doc_text(title) or default_title
     heading = doc.add_heading(level=1)
     run_heading = heading.add_run(clean_title)
     run_heading.font.size = Pt(20)
@@ -207,7 +214,7 @@ def generate_docx(title: str, content: str, user_name: str = "") -> str:
             _add_formatted_docx_runs(p, line)
 
     doc.save(str(filename))
-    logger.info(f"Word hujjati yaratildi: {filename}")
+    logger.info(f"Word hujjati yaratildi ({lang}): {filename}")
     return str(filename)
 
 
@@ -216,21 +223,23 @@ def _add_formatted_docx_runs(paragraph, text: str):
     parts = re.split(r"(\*\*.*?\*\*)", text)
     for part in parts:
         if part.startswith("**") and part.endswith("**"):
-            clean_inner = part[2:-2].replace("*", "").replace("`", "").replace("_", "")
+            clean_inner = part[2:-2].replace("*", "").replace("`", "")
+            clean_inner = re.sub(r"(^|\s)_(.*?)_($|\s)", r"\1\2\3", clean_inner).replace("_", " ")
             if clean_inner:
                 run = paragraph.add_run(clean_inner)
                 run.bold = True
                 run.font.size = Pt(11)
         else:
-            clean_part = part.replace("*", "").replace("`", "").replace("_", "")
+            clean_part = part.replace("*", "").replace("`", "")
+            clean_part = re.sub(r"(^|\s)_(.*?)_($|\s)", r"\1\2\3", clean_part).replace("_", " ")
             if clean_part:
                 run = paragraph.add_run(clean_part)
                 run.font.size = Pt(11)
 
 
-def generate_pdf(title: str, content: str, user_name: str = "") -> str:
+def generate_pdf(title: str, content: str, user_name: str = "", lang: str = "uz") -> str:
     """
-    PDF (.pdf) hujjati yaratish.
+    PDF (.pdf) hujjati yaratish (tanlangan tilda).
     """
     init_pdf_fonts()
 
@@ -290,7 +299,11 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
     )
 
     story = []
-    clean_title = clean_doc_text(title) or "Hisobot va Tahlil"
+    default_title = (
+        "Hisobot va Tahlil" if lang == "uz" else
+        ("Аналитический отчет" if lang == "ru" else "Analytical Report")
+    )
+    clean_title = clean_doc_text(title) or default_title
     story.append(Paragraph(clean_title, title_style))
 
     lines = content.split("\n")
@@ -311,7 +324,8 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
 
         escaped_line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         formatted_line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", escaped_line)
-        formatted_line = formatted_line.replace("_", "").replace("`", "")
+        formatted_line = re.sub(r"(^|\s)_(.*?)_($|\s)", r"\1\2\3", formatted_line)
+        formatted_line = formatted_line.replace("_", " ").replace("`", "")
 
         if line.startswith("#"):
             clean_h = re.sub(r"^#+\s*", "", formatted_line)
@@ -323,18 +337,24 @@ def generate_pdf(title: str, content: str, user_name: str = "") -> str:
             story.append(Paragraph(formatted_line, body_style))
 
     doc.build(story)
-    logger.info(f"PDF hujjati yaratildi: {filename}")
+    logger.info(f"PDF hujjati yaratildi ({lang}): {filename}")
     return str(filename)
 
 
-def generate_presentation(title: str, content: str, user_name: str = "") -> str:
+def generate_presentation(title: str, content: str, user_name: str = "", lang: str = "uz") -> str:
     """
-    Tahlil yoki mavzu asosida PowerPoint (.pptx) taqdimotini yaratish.
+    Tahlil yoki mavzu asosida PowerPoint (.pptx) taqdimotini yaratish (tanlangan tilda).
     """
     unique_id = uuid.uuid4().hex[:8]
     filename = DOWNLOADS_DIR / f"Prezentatsiya_{unique_id}.pptx"
 
     prs = Presentation()
+
+    default_title = (
+        "Taqdimot" if lang == "uz" else
+        ("Презентация" if lang == "ru" else "Presentation")
+    )
+    clean_title = clean_doc_text(re.sub(r"^#+\s*", "", title)) or default_title
 
     # 1. Titul slaydi (Title Slide)
     title_slide_layout = prs.slide_layouts[0]
@@ -342,13 +362,22 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
     slide_title = slide.shapes.title
     slide_subtitle = slide.placeholders[1]
 
-    clean_title = clean_doc_text(re.sub(r"^#+\s*", "", title)) or "Taqdimot"
     slide_title.text = clean_title
-    slide_subtitle.text = "Tahliliy hisobot va taqdimot"
+    slide_subtitle.text = (
+        "Tahliliy hisobot va taqdimot" if lang == "uz" else
+        ("Аналитический отчет и презентация" if lang == "ru" else "Analytical Report & Presentation")
+    )
 
     # 2. Matnni slaydlar bo'yicha ajratish
     sections: List[Dict[str, List[str]]] = []
-    current_title = "Umumiy Ma'lumot"
+    default_plan = (
+        "Reja va Tahlil" if lang == "uz" else
+        ("План и тезисы" if lang == "ru" else "Plan & Analysis")
+    )
+    current_title = (
+        "Umumiy Ma'lumot" if lang == "uz" else
+        ("Общие сведения" if lang == "ru" else "Overview")
+    )
     current_bullets: List[str] = []
 
     lines = content.split("\n")
@@ -366,13 +395,13 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
         if not line:
             continue
 
-        if line.startswith("#") or re.match(r"^(Slayd|Slide)\s*\d+[:\.]?", line, re.IGNORECASE):
+        if line.startswith("#") or re.match(r"^(Slayd|Slide|Слайд)\s*\d+[:\.]?", line, re.IGNORECASE):
             if current_bullets:
                 sections.append({"title": current_title, "bullets": current_bullets})
                 current_bullets = []
-            clean_sec_title = re.sub(r"^(#+|Slayd\s*\d+[:\.]?|Slide\s*\d+[:\.]?)\s*", "", line, flags=re.IGNORECASE)
+            clean_sec_title = re.sub(r"^(#+|Slayd\s*\d+[:\.]?|Slide\s*\d+[:\.]?|Слайд\s*\d+[:\.]?)\s*", "", line, flags=re.IGNORECASE)
             clean_sec_title = clean_doc_text(clean_sec_title)
-            current_title = clean_sec_title or "Reja va Tahlil"
+            current_title = clean_sec_title or default_plan
         else:
             clean_bullet = re.sub(r"^[\*\-•\d\.]+\s*", "", line)
             clean_bullet = clean_doc_text(clean_bullet)
@@ -388,11 +417,13 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
         all_items = [x for x in all_items if x]
         sections = []
         chunk_size = 4
+        part_word = "Qism" if lang == "uz" else ("Часть" if lang == "ru" else "Part")
+        topic_word = "Mavzu" if lang == "uz" else ("Тема" if lang == "ru" else "Topic")
         for i in range(0, len(all_items), chunk_size):
             chunk = all_items[i:i + chunk_size]
             part_num = (i // chunk_size) + 1
             sections.append({
-                "title": f"Mavzu: {clean_title} (Qism {part_num})",
+                "title": f"{topic_word}: {clean_title} ({part_word} {part_num})",
                 "bullets": chunk
             })
 
@@ -421,24 +452,33 @@ def generate_presentation(title: str, content: str, user_name: str = "") -> str:
     end_slide = prs.slides.add_slide(title_slide_layout)
     end_title = end_slide.shapes.title
     end_sub = end_slide.placeholders[1]
-    end_title.text = "E'tiboringiz uchun rahmat!"
-    end_sub.text = "Savollar va muhokama"
+    end_title.text = (
+        "E'tiboringiz uchun rahmat!" if lang == "uz" else
+        ("Спасибо за внимание!" if lang == "ru" else "Thank you for your attention!")
+    )
+    end_sub.text = (
+        "Savollar va muhokama" if lang == "uz" else
+        ("Вопросы и обсуждение" if lang == "ru" else "Questions & Discussion")
+    )
 
     prs.save(str(filename))
-    logger.info(f"Prezentatsiya yaratildi: {filename}")
+    logger.info(f"Prezentatsiya yaratildi ({lang}): {filename}")
     return str(filename)
 
 
-def generate_excel(title: str, content: str, user_name: str = "") -> str:
+def generate_excel(title: str, content: str, user_name: str = "", lang: str = "uz") -> str:
     """
-    Tahlil ma'lumotlarini professional formatlangan Excel (.xlsx) jadvaliga aylantirish.
+    Tahlil ma'lumotlarini professional formatlangan Excel (.xlsx) jadvaliga aylantirish (tanlangan tilda).
     """
     unique_id = uuid.uuid4().hex[:8]
     filename = DOWNLOADS_DIR / f"Jadval_{unique_id}.xlsx"
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Tahlil Jadvali"
+    ws.title = (
+        "Tahlil Jadvali" if lang == "uz" else
+        ("Таблица анализа" if lang == "ru" else "Analysis Table")
+    )
 
     # Stillar
     navy_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -455,14 +495,33 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     # Sarlavha qatori (Metama'lumot va bot manzili olib tashlangan)
     ws.merge_cells("A1:D1")
     title_cell = ws["A1"]
-    clean_title = clean_doc_text(title) or "Hisobot va Maʼlumotlar Jadvali"
+    default_title = (
+        "Hisobot va Maʼlumotlar Jadvali" if lang == "uz" else
+        ("Таблица данных и анализа" if lang == "ru" else "Data & Analysis Table")
+    )
+    clean_title = clean_doc_text(title) or default_title
     title_cell.value = clean_title
     title_cell.font = Font(name="Arial", size=14, bold=True, color="1F4E79")
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[1].height = 28
 
     # Jadval sarlavhasi (Headers) - 3-qatordan boshlanadi
-    headers = ["№", "Bo'lim / Mavzu", "Batafsil Tavsif / Ma'lumot", "Status / Izoh"]
+    if lang == "uz":
+        headers = ["№", "Bo'lim / Mavzu", "Batafsil Tavsif / Ma'lumot", "Holat / Izoh"]
+        default_status = "Mavjud"
+        analyzed_status = "Tahlil qilingan"
+        current_category = "Asosiy tahlil"
+    elif lang == "ru":
+        headers = ["№", "Раздел / Тема", "Подробное описание / Данные", "Статус / Примечание"]
+        default_status = "В наличии"
+        analyzed_status = "Проанализировано"
+        current_category = "Основной анализ"
+    else:
+        headers = ["№", "Section / Topic", "Detailed Description / Data", "Status / Note"]
+        default_status = "Available"
+        analyzed_status = "Analyzed"
+        current_category = "Key Analysis"
+
     for col_idx, h_text in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col_idx, value=h_text)
         cell.fill = navy_fill
@@ -475,7 +534,6 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     lines = content.split("\n")
     row_num = 4
     item_idx = 1
-    current_category = "Asosiy tahlil"
 
     # Agar matnda Markdown jadval (| col1 | col2 |) bo'lsa
     table_lines = [l.strip() for l in lines if "|" in l and not l.strip().startswith("|---")]
@@ -486,7 +544,7 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
                 c1 = ws.cell(row=row_num, column=1, value=item_idx)
                 c2 = ws.cell(row=row_num, column=2, value=cols[0] if len(cols) > 0 else "")
                 c3 = ws.cell(row=row_num, column=3, value=cols[1] if len(cols) > 1 else "")
-                c4 = ws.cell(row=row_num, column=4, value=cols[2] if len(cols) > 2 else "Mavjud")
+                c4 = ws.cell(row=row_num, column=4, value=cols[2] if len(cols) > 2 else default_status)
 
                 for c in (c1, c2, c3, c4):
                     c.font = data_font
@@ -514,7 +572,7 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
                     c1 = ws.cell(row=row_num, column=1, value=item_idx)
                     c2 = ws.cell(row=row_num, column=2, value=current_category)
                     c3 = ws.cell(row=row_num, column=3, value=clean_text)
-                    c4 = ws.cell(row=row_num, column=4, value="Tahlil qilingan")
+                    c4 = ws.cell(row=row_num, column=4, value=analyzed_status)
 
                     for c in (c1, c2, c3, c4):
                         c.font = data_font
@@ -539,5 +597,5 @@ def generate_excel(title: str, content: str, user_name: str = "") -> str:
     ws.column_dimensions["D"].width = 18
 
     wb.save(str(filename))
-    logger.info(f"Excel fayli yaratildi: {filename}")
+    logger.info(f"Excel fayli yaratildi ({lang}): {filename}")
     return str(filename)

@@ -82,6 +82,35 @@ result_store: dict[str, dict] = {}
 pending_docs: dict[str, dict] = {}
 
 
+def format_doc_title(filename: str, section_title: str = "", lang: str = "uz") -> str:
+    """Hujjat va bo'lim nomini chiroyli, bo'shliqlari to'g'ri, imlo va tilga mos formatlash"""
+    base = re.sub(r"\.[a-zA-Z0-9]+$", "", filename or "")
+    base = re.sub(r"_+", " ", base).strip()
+    base = re.sub(r"\s+", " ", base)
+
+    sec = re.sub(r"_+", " ", section_title or "").strip()
+    sec = re.sub(r"\s+", " ", sec)
+
+    if sec and base:
+        if len(base) > 35:
+            base = base[:35].rstrip() + "..."
+        return f"{base}: {sec}"
+    elif sec:
+        return sec
+    elif base:
+        return base
+    else:
+        return "Hujjat tahlili" if lang == "uz" else ("Анализ документа" if lang == "ru" else "Document Analysis")
+
+
+def get_safe_file_title(title: str, default: str = "Document") -> str:
+    """Fayl tizimi va Telegram uchun xavfsiz va chiroyli fayl nomi (tagchiziqlarsiz va so'zlarni yopishtirmasdan)"""
+    safe = re.sub(r'[\\/*?:"<>|]', "", title or "")
+    safe = re.sub(r"_+", " ", safe)
+    safe = re.sub(r"\s+", " ", safe).strip()
+    return safe[:35] or default
+
+
 def store_result(
     title: str,
     content: str,
@@ -91,8 +120,10 @@ def store_result(
 ) -> str:
     """Natijani xotiraga va doimiy SQLite arxivga saqlash hamda res_id qaytarish"""
     res_id = uuid.uuid4().hex[:8]
+    clean_t = re.sub(r"_+", " ", title or "").strip()
+    clean_t = re.sub(r"\s+", " ", clean_t) or ("Tahlil Natijasi" if category != "doc" else "Hujjat Tahlili")
     result_store[res_id] = {
-        "title": title or "Tahlil Natijasi",
+        "title": clean_t,
         "content": content,
         "user_name": user_name,
         "user_id": user_id,
@@ -893,7 +924,12 @@ async def handle_document_upload(message: Message):
 
             target_lang_names = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
             tgt_name = target_lang_names.get(tgt, tgt)
-            title = f"Tarjima ({tgt_name}): {filename}"
+            clean_fn = format_doc_title(filename, "", lang=lang)
+            title = (
+                f"Tarjima ({tgt_name}): {clean_fn}" if lang == "uz" else
+                (f"Перевод ({tgt_name}): {clean_fn}" if lang == "ru" else
+                 f"Translation ({tgt_name}): {clean_fn}")
+            )
             user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
             res_id = store_result(title=title, content=translated, user_name=user_name, user_id=user_id, category="trans")
             await send_ai_response(message, translated, res_id=res_id, lang=lang)
@@ -1110,7 +1146,7 @@ async def handle_document_section_callback(callback: CallbackQuery):
             await callback.message.answer(analysis, parse_mode="HTML")
             return
 
-        title = f"{filename}: {section_title[:30]}"
+        title = format_doc_title(filename, section_title, lang=lang)
         res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
         result_markup = get_document_result_keyboard(
             res_id=res_id,
@@ -1262,15 +1298,16 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
             await send_ai_response(callback.message, response, res_id=res_id, lang=lang)
 
         if action in ("docx", "all"):
-            docx_path = generate_docx(title=title_audio, content=response, user_name=user_name)
+            docx_path = generate_docx(title=title_audio, content=response, user_name=user_name, lang=lang)
             caption_docx = (
                 "📄 <b>Audio xabar tahlili (Word hujjati)</b>" if lang == "uz" else
                 ("📄 <b>Анализ аудиосообщения (Документ Word)</b>" if lang == "ru" else
                  "📄 <b>Audio analysis (Word document)</b>")
             )
+            audio_fn_docx = f"Audio_Tahlil_{audio_id}.docx" if lang == "uz" else (f"Audio_Analiz_{audio_id}.docx" if lang == "ru" else f"Audio_Analysis_{audio_id}.docx")
             try:
                 await callback.message.answer_document(
-                    document=FSInputFile(docx_path, filename=f"Audio_Tahlil_{audio_id}.docx"),
+                    document=FSInputFile(docx_path, filename=audio_fn_docx),
                     caption=caption_docx,
                     parse_mode="HTML"
                 )
@@ -1282,15 +1319,16 @@ async def handle_audio_mode_callback(callback: CallbackQuery):
                         pass
 
         if action in ("pdf", "all"):
-            pdf_path = generate_pdf(title=title_audio, content=response, user_name=user_name)
+            pdf_path = generate_pdf(title=title_audio, content=response, user_name=user_name, lang=lang)
             caption_pdf = (
                 "📑 <b>Audio xabar tahlili (PDF hujjati)</b>" if lang == "uz" else
                 ("📑 <b>Анализ аудиосообщения (Документ PDF)</b>" if lang == "ru" else
                  "📑 <b>Audio analysis (PDF document)</b>")
             )
+            audio_fn_pdf = f"Audio_Tahlil_{audio_id}.pdf" if lang == "uz" else (f"Audio_Analiz_{audio_id}.pdf" if lang == "ru" else f"Audio_Analysis_{audio_id}.pdf")
             try:
                 await callback.message.answer_document(
-                    document=FSInputFile(pdf_path, filename=f"Audio_Tahlil_{audio_id}.pdf"),
+                    document=FSInputFile(pdf_path, filename=audio_fn_pdf),
                     caption=caption_pdf,
                     parse_mode="HTML"
                 )
@@ -1435,16 +1473,19 @@ async def handle_transfer_execution(callback: CallbackQuery):
         ("Экспорт..." if lang == "ru" else "Transferring...")
     )
 
+    safe_title = get_safe_file_title(title, "Dokument" if lang == "ru" else ("Document" if lang == "en" else "Hujjat"))
+    display_title = format_doc_title("", title, lang=lang)
+
     if target == "docx":
-        docx_path = generate_docx(title=title, content=content, user_name=user_name)
+        docx_path = generate_docx(title=display_title, content=content, user_name=user_name, lang=lang)
         caption_docx = (
-            f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
-            (f"📄 <b>Документ Word создан</b>\n<i>Тема: {title}</i>" if lang == "ru" else
-             f"📄 <b>Word document created</b>\n<i>Topic: {title}</i>")
+            f"📄 <b>Word hujjati yaratildi</b>\n<i>Mavzu: {display_title}</i>" if lang == "uz" else
+            (f"📄 <b>Документ Word создан</b>\n<i>Тема: {display_title}</i>" if lang == "ru" else
+             f"📄 <b>Word document created</b>\n<i>Topic: {display_title}</i>")
         )
         try:
             await callback.message.answer_document(
-                document=FSInputFile(docx_path, filename=f"{title[:20]}.docx"),
+                document=FSInputFile(docx_path, filename=f"{safe_title}.docx"),
                 caption=caption_docx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
@@ -1454,15 +1495,15 @@ async def handle_transfer_execution(callback: CallbackQuery):
                 os.remove(docx_path)
 
     elif target == "pdf":
-        pdf_path = generate_pdf(title=title, content=content, user_name=user_name)
+        pdf_path = generate_pdf(title=display_title, content=content, user_name=user_name, lang=lang)
         caption_pdf = (
-            f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
-            (f"📑 <b>Документ PDF создан</b>\n<i>Тема: {title}</i>" if lang == "ru" else
-             f"📑 <b>PDF document created</b>\n<i>Topic: {title}</i>")
+            f"📑 <b>PDF hujjati yaratildi</b>\n<i>Mavzu: {display_title}</i>" if lang == "uz" else
+            (f"📑 <b>Документ PDF создан</b>\n<i>Тема: {display_title}</i>" if lang == "ru" else
+             f"📑 <b>PDF document created</b>\n<i>Topic: {display_title}</i>")
         )
         try:
             await callback.message.answer_document(
-                document=FSInputFile(pdf_path, filename=f"{title[:20]}.pdf"),
+                document=FSInputFile(pdf_path, filename=f"{safe_title}.pdf"),
                 caption=caption_pdf,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
@@ -1479,20 +1520,20 @@ async def handle_transfer_execution(callback: CallbackQuery):
         )
         status_msg = await callback.message.reply(wait_pptx, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
-        slides_text = await ai_service.format_for_presentation(callback.from_user.id, content)
-        pptx_path = generate_presentation(title=title, content=slides_text, user_name=user_name)
+        slides_text = await ai_service.format_for_presentation(callback.from_user.id, content, lang=lang)
+        pptx_path = generate_presentation(title=display_title, content=slides_text, user_name=user_name, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
             pass
         caption_pptx = (
-            f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
-            (f"📽 <b>Презентация PowerPoint создана</b>\n<i>Тема: {title}</i>" if lang == "ru" else
-             f"📽 <b>PowerPoint presentation created</b>\n<i>Topic: {title}</i>")
+            f"📽 <b>PowerPoint taqdimoti yaratildi</b>\n<i>Mavzu: {display_title}</i>" if lang == "uz" else
+            (f"📽 <b>Презентация PowerPoint создана</b>\n<i>Тема: {display_title}</i>" if lang == "ru" else
+             f"📽 <b>PowerPoint presentation created</b>\n<i>Topic: {display_title}</i>")
         )
         try:
             await callback.message.answer_document(
-                document=FSInputFile(pptx_path, filename=f"{title[:20]}.pptx"),
+                document=FSInputFile(pptx_path, filename=f"{safe_title}.pptx"),
                 caption=caption_pptx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
@@ -1509,20 +1550,20 @@ async def handle_transfer_execution(callback: CallbackQuery):
         )
         status_msg = await callback.message.reply(wait_xlsx, parse_mode="HTML")
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
-        table_text = await ai_service.format_for_excel(callback.from_user.id, content)
-        xlsx_path = generate_excel(title=title, content=table_text, user_name=user_name)
+        table_text = await ai_service.format_for_excel(callback.from_user.id, content, lang=lang)
+        xlsx_path = generate_excel(title=display_title, content=table_text, user_name=user_name, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
             pass
         caption_xlsx = (
-            f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {title}</i>" if lang == "uz" else
-            (f"📊 <b>Таблица Excel создана</b>\n<i>Тема: {title}</i>" if lang == "ru" else
-             f"📊 <b>Excel table created</b>\n<i>Topic: {title}</i>")
+            f"📊 <b>Excel jadvali yaratildi</b>\n<i>Mavzu: {display_title}</i>" if lang == "uz" else
+            (f"📊 <b>Таблица Excel создана</b>\n<i>Тема: {display_title}</i>" if lang == "ru" else
+             f"📊 <b>Excel table created</b>\n<i>Topic: {display_title}</i>")
         )
         try:
             await callback.message.answer_document(
-                document=FSInputFile(xlsx_path, filename=f"{title[:20]}.xlsx"),
+                document=FSInputFile(xlsx_path, filename=f"{safe_title}.xlsx"),
                 caption=caption_xlsx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
@@ -2342,7 +2383,7 @@ async def handle_text_message(message: Message):
                     await message.answer(analysis, parse_mode="HTML")
                     return
 
-                title = f"{filename}: {custom_query[:25]}"
+                title = format_doc_title(filename, custom_query, lang=lang)
                 res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
                 result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False, lang=lang)
                 await send_ai_response(message, analysis, res_id=res_id, reply_markup=result_markup, lang=lang)
@@ -2428,27 +2469,29 @@ async def handle_text_message(message: Message):
         )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
-        slides_text = await ai_service.format_for_presentation(user_id=user_id, text=text)
-        pptx_path = generate_presentation(title=text[:40], content=slides_text, user_name=user_name)
+        slides_text = await ai_service.format_for_presentation(user_id=user_id, text=text, lang=lang)
+        clean_slide_title = format_doc_title("", text[:40], lang=lang)
+        pptx_path = generate_presentation(title=clean_slide_title, content=slides_text, user_name=user_name, lang=lang)
         try:
             await status_msg.delete()
         except Exception:
             pass
 
         title_slides = (
-            f"Prezentatsiya: {text[:30]}" if lang == "uz" else
-            (f"Презентация: {text[:30]}" if lang == "ru" else
-             f"Presentation: {text[:30]}")
+            f"Prezentatsiya: {clean_slide_title[:30]}" if lang == "uz" else
+            (f"Презентация: {clean_slide_title[:30]}" if lang == "ru" else
+             f"Presentation: {clean_slide_title[:30]}")
         )
         res_id = store_result(title=title_slides, content=slides_text, user_name=user_name, user_id=user_id, category="slides")
         caption_pptx = (
-            f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {text[:45]}</i>" if lang == "uz" else
-            (f"📽 <b>Ваша презентация PowerPoint готова!</b>\n<i>Тема: {text[:45]}</i>" if lang == "ru" else
-             f"📽 <b>Your PowerPoint presentation is ready!</b>\n<i>Topic: {text[:45]}</i>")
+            f"📽 <b>PowerPoint taqdimotingiz tayyor!</b>\n<i>Mavzu: {clean_slide_title[:45]}</i>" if lang == "uz" else
+            (f"📽 <b>Ваша презентация PowerPoint готова!</b>\n<i>Тема: {clean_slide_title[:45]}</i>" if lang == "ru" else
+             f"📽 <b>Your PowerPoint presentation is ready!</b>\n<i>Topic: {clean_slide_title[:45]}</i>")
         )
+        pptx_fn = f"Prezentatsiya_{res_id}.pptx" if lang != "en" else f"Presentation_{res_id}.pptx"
         try:
             await message.answer_document(
-                document=FSInputFile(pptx_path, filename=f"Prezentatsiya_{res_id}.pptx"),
+                document=FSInputFile(pptx_path, filename=pptx_fn),
                 caption=caption_pptx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
@@ -2469,10 +2512,11 @@ async def handle_text_message(message: Message):
         )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.UPLOAD_DOCUMENT)
 
-        docx_path = generate_docx(title=text[:35], content=text, user_name=user_name)
-        pdf_path = generate_pdf(title=text[:35], content=text, user_name=user_name)
-        table_text = await ai_service.format_for_excel(user_id, text)
-        xlsx_path = generate_excel(title=text[:35], content=table_text, user_name=user_name)
+        clean_office_title = format_doc_title("", text[:35], lang=lang)
+        docx_path = generate_docx(title=clean_office_title, content=text, user_name=user_name, lang=lang)
+        pdf_path = generate_pdf(title=clean_office_title, content=text, user_name=user_name, lang=lang)
+        table_text = await ai_service.format_for_excel(user_id, text, lang=lang)
+        xlsx_path = generate_excel(title=clean_office_title, content=table_text, user_name=user_name, lang=lang)
 
         try:
             await status_msg.delete()
@@ -2480,7 +2524,7 @@ async def handle_text_message(message: Message):
             pass
 
         title_office = (
-            text[:30] if text else
+            clean_office_title if clean_office_title else
             ("Hujjatlar to'plami" if lang == "uz" else ("Пакет документов" if lang == "ru" else "Document package"))
         )
         res_id = store_result(title=title_office, content=text, user_name=user_name, user_id=user_id, category="office")
@@ -2496,19 +2540,22 @@ async def handle_text_message(message: Message):
             "📊 <b>Excel jadvali (.xlsx)</b>" if lang == "uz" else
             ("📊 <b>Таблица Excel (.xlsx)</b>" if lang == "ru" else "📊 <b>Excel spreadsheet (.xlsx)</b>")
         )
+        docx_fn = f"Hujjat_{res_id}.docx" if lang == "uz" else (f"Dokument_{res_id}.docx" if lang == "ru" else f"Document_{res_id}.docx")
+        pdf_fn = f"Hujjat_{res_id}.pdf" if lang == "uz" else (f"Dokument_{res_id}.pdf" if lang == "ru" else f"Document_{res_id}.pdf")
+        xlsx_fn = f"Jadval_{res_id}.xlsx" if lang == "uz" else (f"Tablitsa_{res_id}.xlsx" if lang == "ru" else f"Spreadsheet_{res_id}.xlsx")
         try:
             await message.answer_document(
-                document=FSInputFile(docx_path, filename=f"Hujjat_{res_id}.docx"),
+                document=FSInputFile(docx_path, filename=docx_fn),
                 caption=caption_docx,
                 parse_mode="HTML"
             )
             await message.answer_document(
-                document=FSInputFile(pdf_path, filename=f"Hujjat_{res_id}.pdf"),
+                document=FSInputFile(pdf_path, filename=pdf_fn),
                 caption=caption_pdf,
                 parse_mode="HTML"
             )
             await message.answer_document(
-                document=FSInputFile(xlsx_path, filename=f"Jadval_{res_id}.xlsx"),
+                document=FSInputFile(xlsx_path, filename=xlsx_fn),
                 caption=caption_xlsx,
                 parse_mode="HTML",
                 reply_markup=get_content_actions_keyboard(res_id, lang=lang)
