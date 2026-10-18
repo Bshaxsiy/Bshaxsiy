@@ -11,12 +11,17 @@ from handlers import router
 from guard_middleware import GuardMiddleware
 
 # Logging sozlamalari
+log_handlers = []
+if sys.stdout is not None:
+    log_handlers.append(logging.StreamHandler(sys.stdout))
+else:
+    from config import BASE_DIR
+    log_handlers.append(logging.FileHandler(BASE_DIR / "bot.log", encoding="utf-8"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
 
 # Google Gemini API sozlamalari
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 # Yuklab olingan fayllar vaqtincha saqlanadigan papka
 DOWNLOADS_DIR = BASE_DIR / "downloads"

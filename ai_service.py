@@ -2,7 +2,8 @@ import io
 import os
 import re
 import logging
-from typing import Optional, Dict, List
+import asyncio
+from typing import Optional, Dict, List, Tuple
 
 from google import genai
 from google.genai import types
@@ -10,6 +11,14 @@ from google.genai import types
 import config
 
 logger = logging.getLogger(__name__)
+
+# Model tanqisligi yoki 503 bo'lganda avtomatik ulanadigan zaxira modellar ro'yxati
+FALLBACK_MODELS = [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.8-flash",
+]
 
 SYSTEM_PROMPT = (
     "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz. "
@@ -37,16 +46,16 @@ DEEP_RESEARCH_PROMPT = (
 class AIService:
     def __init__(self):
         self._client: Optional[genai.Client] = None
-        self._user_chats: Dict[int, types.GenerateContentResponse] = {}
+        self._user_chats: Dict[int, Tuple[any, str]] = {}
         self._api_key = config.GEMINI_API_KEY
-        self._model = config.GEMINI_MODEL or "gemini-3.8-flash"
+        self._model = config.GEMINI_MODEL or "gemini-3.5-flash"
         self._init_client()
 
     def _init_client(self):
         if self._api_key and self._api_key != "YOUR_GEMINI_API_KEY_HERE":
             try:
                 self._client = genai.Client(api_key=self._api_key)
-                logger.info(f"Gemini AI mijozi muvaffaqiyatli ishga tushirildi (model: {self._model})")
+                logger.info(f"Gemini AI mijozi muvaffaqiyatli ishga tushirildi (bosh model: {self._model})")
             except Exception as e:
                 logger.error(f"Gemini AI mijozini yaratishda xatolik: {e}")
                 self._client = None
@@ -68,130 +77,66 @@ class AIService:
             del self._user_chats[user_id]
             logger.info(f"Foydalanuvchi {user_id} uchun AI chat tarixi tozalandi.")
 
-    def _get_or_create_chat(self, user_id: int):
+    def _get_candidate_models(self) -> List[str]:
+        """Sinab ko'riladigan modellar navbati (bosh model + zaxiralar)"""
+        candidates = [self._model]
+        for m in FALLBACK_MODELS:
+            if m not in candidates:
+                candidates.append(m)
+        return candidates
+
+    def _get_or_create_chat(self, user_id: int, model: Optional[str] = None):
         if not self._client:
             self._init_client()
         if not self._client:
             return None
 
-        if user_id not in self._user_chats:
+        target_model = model or self._model
+
+        if user_id in self._user_chats:
+            chat, current_model = self._user_chats[user_id]
+            if model and current_model != model:
+                try:
+                    chat_config = types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.7,
+                    )
+                    chat = self._client.aio.chats.create(
+                        model=model,
+                        config=chat_config
+                    )
+                    self._user_chats[user_id] = (chat, model)
+                except Exception as e:
+                    logger.warning(f"Chat yaratishda xatolik ({model}): {e}")
+                    return None
+            return chat
+
+        try:
             chat_config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.7,
             )
             chat = self._client.aio.chats.create(
-                model=self._model,
+                model=target_model,
                 config=chat_config
             )
-            self._user_chats[user_id] = chat
+            self._user_chats[user_id] = (chat, target_model)
+            return chat
+        except Exception as e:
+            logger.warning(f"Yangi chat yaratishda xatolik ({target_model}): {e}")
+            return None
 
-        return self._user_chats[user_id]
-
-    async def ask_gemini(
+    async def generate_content_with_fallback(
         self,
-        user_id: int,
-        prompt: str,
-        image_bytes: Optional[bytes] = None,
-        mime_type: str = "image/jpeg"
+        contents,
+        config: Optional[types.GenerateContentConfig] = None,
+        timeout: float = 55.0,
+        operation_name: str = "AI so'rovi"
     ) -> str:
         """
-        Gemini AI ga savol/xabar yuborish va javob olish
-        """
-        if not self.is_configured():
-            return (
-                "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
-                "AI xizmatidan foydalanish uchun <code>.env</code> faylida <code>GEMINI_API_KEY</code> ni sozlang.\n\n"
-                "🔑 Kalitni bepul olish: https://aistudio.google.com/app/apikey"
-            )
-
-        chat = self._get_or_create_chat(user_id)
-        if not chat:
-            return "❌ AI mijozi bilan bog'lanishda xatolik yuz berdi. API kalitni tekshiring."
-
-        try:
-            if image_bytes:
-                image_part = types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type=mime_type
-                )
-                text_content = prompt.strip() if prompt else "Ushbu rasmni ko'rib chiqib, nima aks etganini tushuntiring."
-                response = await chat.send_message(message=[image_part, text_content])
-            else:
-                response = await chat.send_message(message=prompt)
-
-            if response and response.text:
-                return response.text
-            return "Javob olinmadi. Iltimos, savolingizni boshqacharoq shaklda berib ko'ring."
-
-        except Exception as e:
-            err_msg = str(e)
-            logger.exception(f"Gemini API so'rovida xatolik: {err_msg}")
-
-            if "API_KEY_INVALID" in err_msg or "400" in err_msg and "API key" in err_msg:
-                return "❌ <b>Gemini API kaliti noto'g'ri yoki yaroqsiz!</b> Iltimos, to'g'ri kalit kiriting."
-            elif "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg:
-                return "⏳ <b>Gemini API so'rovlar limiti to'ldi.</b> Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring."
-            elif "SAFETY" in err_msg:
-                return "🛡 Ushbu so'rov xavfsizlik filtrlari tomonidan to'xtatildi."
-
-            return f"❌ <b>AI xatoligi:</b>\n{err_msg[:200]}"
-
-    async def ask_gemini_audio(
-        self,
-        user_id: int,
-        audio_bytes: bytes,
-        mime_type: str = "audio/ogg",
-        prompt: Optional[str] = None
-    ) -> str:
-        """
-        Audio xabarni Gemini AI ga yuborish va tahlil/javob olish
-        """
-        if not self.is_configured():
-            return (
-                "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
-                "AI xizmatidan foydalanish uchun <code>.env</code> faylida <code>GEMINI_API_KEY</code> ni sozlang.\n\n"
-                "🔑 Kalitni bepul olish: https://aistudio.google.com/app/apikey"
-            )
-
-        chat = self._get_or_create_chat(user_id)
-        if not chat:
-            return "❌ AI mijozi bilan bog'lanishda xatolik yuz berdi. API kalitni tekshiring."
-
-        try:
-            audio_part = types.Part.from_bytes(
-                data=audio_bytes,
-                mime_type=mime_type
-            )
-            instruction = (
-                prompt.strip() if prompt else
-                "Foydalanuvchi ushbu audio xabarni yubordi.\n"
-                "Topshiriq:\n"
-                "1. Audio xabarni boshidan oxirigacha diqqat bilan eshiting va undagi barcha fikrlar, savollar hamda topshiriqlarni to'liq inobatga oling.\n"
-                "2. Audio xabarning oxiridagi gaplar yoki so'zlarni aslo tushirib qoldirmang, xulosani to'liq chiqaring.\n"
-                "3. Javobni sof, adabiy o'zbek tilida, imlo va grammatika qoidalariga 100% rioya qilib bering.\n"
-                "4. So'z oxiridagi barcha qo'shimchalar (-da, -dan, -ga, -ni, -ning, -lar, -dagi) to'liq va xatosiz yozilsin, harflar tushib qolmasin.\n"
-                "5. Javobda hech qanday keraksiz inglizcha so'z yoki jargon ishlatmang.\n"
-                "6. Agar foydalanuvchi murojaat yoki fikr bildirgan bo'lsa, xabar mazmunini to'liq ifodalab, ravon tahliliy xulosa bering."
-            )
-            response = await chat.send_message(message=[audio_part, instruction])
-            if response and response.text:
-                return response.text
-            return "Audio xabarni tahlil qilishda javob matni olinmadi."
-
-        except Exception as e:
-            err_msg = str(e)
-            logger.exception(f"Gemini audio tahlilida xatolik: {err_msg}")
-
-            if "API_KEY_INVALID" in err_msg or "400" in err_msg and "API key" in err_msg:
-                return "❌ <b>Gemini API kaliti noto'g'ri yoki yaroqsiz!</b>"
-            elif "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg:
-                return "⏳ <b>Gemini so'rovlar limiti to'ldi.</b> Birozdan so'ng qayta urinib ko'ring."
-
-            return f"❌ <b>Audio tahlilida xatolik:</b>\n{err_msg[:200]}"
-
-    async def deep_research(self, user_id: int, query: str) -> str:
-        """
-        Mavzu bo'yicha chuqur tahlil (Deep Research) o'tkazish
+        Gemini modeliga murojaat qilish.
+        Agar tanlangan model 503 (high demand), 429 (quota), server xatosi yoki timeout bersa,
+        avtomatik ravishda zaxira (fallback) modellarga ulanadi.
         """
         if not self.is_configured():
             return "⚠️ Gemini API kaliti kiritilmagan!"
@@ -201,45 +146,204 @@ class AIService:
         if not self._client:
             return "❌ AI mijozi bilan bog'lanishda xatolik."
 
-        try:
-            cfg = types.GenerateContentConfig(
-                system_instruction=DEEP_RESEARCH_PROMPT,
-                temperature=0.4
+        candidates = self._get_candidate_models()
+        last_error = ""
+
+        for model_name in candidates:
+            try:
+                task = self._client.aio.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=config
+                )
+                response = await asyncio.wait_for(task, timeout=timeout)
+                if response and response.text:
+                    if model_name != self._model:
+                        logger.info(f"[{operation_name}] Zaxira model '{model_name}' muvaffaqiyatli ishladi!")
+                    return response.text
+            except asyncio.TimeoutError:
+                last_error = f"{model_name} timeout (> {timeout}s)"
+                logger.warning(f"[{operation_name}] Model '{model_name}' timeout bo'ldi. Zaxira modelga o'tilmoqda...")
+            except Exception as e:
+                err_str = str(e)
+                last_error = err_str
+                logger.warning(f"[{operation_name}] Model '{model_name}' da xatolik: {err_str[:120]}. Zaxira modelga o'tilmoqda...")
+                if "API_KEY_INVALID" in err_str or ("400" in err_str and "API key" in err_str):
+                    return "❌ <b>Gemini API kaliti noto'g'ri yoki yaroqsiz!</b> Iltimos, to'g'ri kalit kiriting."
+
+        logger.error(f"[{operation_name}] Barcha Gemini modellari band yoki xato qaytardi: {last_error}")
+        if "503" in last_error or "UNAVAILABLE" in last_error or "high demand" in last_error:
+            return (
+                "⚠️ <b>Sun'iy intellekt serverida vaqtinchalik yuqori yuklanish (Google 503).</b>\n\n"
+                "Google Gemini tizimida ayni daqiqalarda qisqa muddatli yuqori talab kuzatilmoqda. "
+                "Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring yoki boshqa bo'limni tanlang."
             )
-            prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt,
-                config=cfg
+        elif "RESOURCE_EXHAUSTED" in last_error or "429" in last_error:
+            return "⏳ <b>Gemini API so'rovlar limiti to'ldi.</b> Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring."
+
+        return (
+            "❌ <b>AI xizmati bilan bog'lanishda vaqtinchalik uzilish yuz berdi.</b>\n\n"
+            "Iltimos, birozdan so'ng qayta urinib ko'ring."
+        )
+
+    async def ask_gemini(
+        self,
+        user_id: int,
+        prompt: str,
+        image_bytes: Optional[bytes] = None,
+        mime_type: str = "image/jpeg"
+    ) -> str:
+        """
+        Gemini AI ga savol/xabar yuborish va javob olish (zaxira modellar bilan)
+        """
+        if not self.is_configured():
+            return (
+                "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
+                "AI xizmatidan foydalanish uchun <code>.env</code> faylida <code>GEMINI_API_KEY</code> ni sozlang.\n\n"
+                "🔑 Kalitni bepul olish: https://aistudio.google.com/app/apikey"
             )
-            if response and response.text:
-                return response.text
-            return "Tadqiqot natijasi olinmadi."
-        except Exception as e:
-            logger.exception(f"Deep Research xatoligi: {e}")
-            return f"❌ <b>Deep Research xatoligi:</b> {e}"
+
+        candidates = self._get_candidate_models()
+        last_error = ""
+
+        for model_name in candidates:
+            chat = self._get_or_create_chat(user_id, model=model_name)
+            if not chat:
+                continue
+
+            try:
+                if image_bytes:
+                    image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                    text_content = prompt.strip() if prompt else "Ushbu rasmni ko'rib chiqib, nima aks etganini tushuntiring."
+                    msg_payload = [image_part, text_content]
+                else:
+                    msg_payload = prompt
+
+                task = chat.send_message(message=msg_payload)
+                response = await asyncio.wait_for(task, timeout=45.0)
+
+                if response and response.text:
+                    return response.text
+                return "Javob olinmadi. Iltimos, savolingizni boshqacharoq shaklda berib ko'ring."
+            except asyncio.TimeoutError:
+                last_error = f"{model_name} timeout"
+                logger.warning(f"ask_gemini: {model_name} timeout bo'ldi. Zaxira modelga o'tilmoqda...")
+                self.reset_chat(user_id)
+            except Exception as e:
+                err_msg = str(e)
+                last_error = err_msg
+                logger.warning(f"ask_gemini: {model_name} da xatolik: {err_msg[:120]}. Zaxira modelga o'tilmoqda...")
+                self.reset_chat(user_id)
+                if "API_KEY_INVALID" in err_msg or ("400" in err_msg and "API key" in err_msg):
+                    return "❌ <b>Gemini API kaliti noto'g'ri yoki yaroqsiz!</b> Iltimos, to'g'ri kalit kiriting."
+                if "SAFETY" in err_msg:
+                    return "🛡 Ushbu so'rov xavfsizlik filtrlari tomonidan to'xtatildi."
+
+        if "503" in last_error or "UNAVAILABLE" in last_error or "high demand" in last_error:
+            return (
+                "⚠️ <b>Sun'iy intellekt serverida vaqtinchalik yuqori yuklanish (503).</b>\n\n"
+                "Google Gemini tizimida global talab oshganligi sababli so'rovga vaqtinchalik javob berilmadi. "
+                "Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring."
+            )
+        elif "RESOURCE_EXHAUSTED" in last_error or "429" in last_error:
+            return "⏳ <b>Gemini API so'rovlar limiti to'ldi.</b> Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring."
+
+        return "❌ <b>AI xatoligi:</b> Bog'lanishda uzilish yuz berdi. Iltimos, birozdan so'ng qayta urinib ko'ring."
+
+    async def ask_gemini_audio(
+        self,
+        user_id: int,
+        audio_bytes: bytes,
+        mime_type: str = "audio/ogg",
+        prompt: Optional[str] = None
+    ) -> str:
+        """
+        Audio xabarni Gemini AI ga yuborish va tahlil/javob olish (zaxira modellar bilan)
+        """
+        if not self.is_configured():
+            return (
+                "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
+                "AI xizmatidan foydalanish uchun <code>.env</code> faylida <code>GEMINI_API_KEY</code> ni sozlang.\n\n"
+                "🔑 Kalitni bepul olish: https://aistudio.google.com/app/apikey"
+            )
+
+        instruction = (
+            prompt.strip() if prompt else
+            "Foydalanuvchi ushbu audio xabarni yubordi.\n"
+            "Topshiriq:\n"
+            "1. Audio xabarni boshidan oxirigacha diqqat bilan eshiting va undagi barcha fikrlar, savollar hamda topshiriqlarni to'liq inobatga oling.\n"
+            "2. Audio xabarning oxiridagi gaplar yoki so'zlarni aslo tushirib qoldirmang, xulosani to'liq chiqaring.\n"
+            "3. Javobni sof, adabiy o'zbek tilida, imlo va grammatika qoidalariga 100% rioya qilib bering.\n"
+            "4. So'z oxiridagi barcha qo'shimchalar (-da, -dan, -ga, -ni, -ning, -lar, -dagi) to'liq va xatosiz yozilsin, harflar tushib qolmasin.\n"
+            "5. Javobda hech qanday keraksiz inglizcha so'z yoki jargon ishlatmang.\n"
+            "6. Agar foydalanuvchi murojaat yoki fikr bildirgan bo'lsa, xabar mazmunini to'liq ifodalab, ravon tahliliy xulosa bering."
+        )
+
+        candidates = self._get_candidate_models()
+        last_error = ""
+
+        for model_name in candidates:
+            chat = self._get_or_create_chat(user_id, model=model_name)
+            if not chat:
+                continue
+
+            try:
+                audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                task = chat.send_message(message=[audio_part, instruction])
+                response = await asyncio.wait_for(task, timeout=50.0)
+
+                if response and response.text:
+                    return response.text
+                return "Audio xabarni tahlil qilishda javob matni olinmadi."
+            except asyncio.TimeoutError:
+                last_error = f"{model_name} timeout"
+                logger.warning(f"ask_gemini_audio: {model_name} timeout bo'ldi. Zaxira modelga o'tilmoqda...")
+                self.reset_chat(user_id)
+            except Exception as e:
+                err_msg = str(e)
+                last_error = err_msg
+                logger.warning(f"ask_gemini_audio: {model_name} da xatolik: {err_msg[:120]}. Zaxira modelga o'tilmoqda...")
+                self.reset_chat(user_id)
+                if "API_KEY_INVALID" in err_msg or ("400" in err_msg and "API key" in err_msg):
+                    return "❌ <b>Gemini API kaliti noto'g'ri yoki yaroqsiz!</b>"
+
+        if "503" in last_error or "UNAVAILABLE" in last_error or "high demand" in last_error:
+            return (
+                "⚠️ <b>Sun'iy intellekt serverida vaqtinchalik yuqori yuklanish (503).</b>\n\n"
+                "Google Gemini tizimida global talab oshganligi sababli audio tahlili vaqtinchalik bajarilmadi. "
+                "Iltimos, 1-2 daqiqadan so'ng qayta urinib ko'ring."
+            )
+        elif "RESOURCE_EXHAUSTED" in last_error or "429" in last_error:
+            return "⏳ <b>Gemini so'rovlar limiti to'ldi.</b> Birozdan so'ng qayta urinib ko'ring."
+
+        return "❌ <b>Audio tahlilida xatolik yuz berdi.</b> Iltimos, birozdan so'ng qayta urinib ko'ring."
+
+    async def deep_research(self, user_id: int, query: str) -> str:
+        """
+        Mavzu bo'yicha chuqur tahlil (Deep Research) o'tkazish
+        """
+        cfg = types.GenerateContentConfig(
+            system_instruction=DEEP_RESEARCH_PROMPT,
+            temperature=0.4
+        )
+        prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
+        return await self.generate_content_with_fallback(
+            contents=prompt,
+            config=cfg,
+            timeout=60.0,
+            operation_name=f"Deep Research ({query[:30]})"
+        )
 
     async def detect_document_sections(self, doc_text: str, filename: str) -> List[str]:
         """
         Hujjatning asosiy bo'limlari, boblari, moddalari yoki mavzularini aniqlash
         """
-        if not self.is_configured():
-            return [
-                "1. Umumiy qoidalar va asosiy tushunchalar",
-                "2. Huquqlar, majburiyatlar va tartib-taomillar",
-                "3. Moliyaviy shartlar, muddatlar va javobgarlik",
-                "4. Nizolar, bekor qilish va yakuniy qoidalar"
-            ]
-
-        if not self._client:
-            self._init_client()
-        if not self._client:
-            return [
-                "1. Umumiy qoidalar va asosiy tushunchalar",
-                "2. Huquqlar, majburiyatlar va tartib-taomillar",
-                "3. Moliyaviy shartlar, muddatlar va javobgarlik",
-                "4. Nizolar, bekor qilish va yakuniy qoidalar"
-            ]
+        default_sections = [
+            "1. Umumiy qoidalar va asosiy tushunchalar",
+            "2. Huquqlar, majburiyatlar va tartib-taomillar",
+            "3. Moliyaviy shartlar, muddatlar va javobgarlik",
+            "4. Nizolar, bekor qilish va yakuniy qoidalar"
+        ]
 
         prompt = (
             f"Foydalanuvchi '{filename}' nomli hujjatni yubordi.\n"
@@ -249,13 +353,15 @@ class AIService:
             "Faqat har bir bo'lim nomini alohida qatorda yozing. Hech qanday qo'shimcha so'z, izoh yoki kirish qismi yozmang.\n\n"
             f"--- HUJJAT BOSHI ---\n{doc_text[:18000]}"
         )
+
         try:
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt
+            res_text = await self.generate_content_with_fallback(
+                contents=prompt,
+                timeout=25.0,
+                operation_name=f"Bo'limlarni aniqlash ({filename})"
             )
-            if response and response.text:
-                lines = [l.strip() for l in response.text.split("\n") if l.strip()]
+            if res_text and not res_text.startswith("⚠️") and not res_text.startswith("❌"):
+                lines = [l.strip() for l in res_text.split("\n") if l.strip()]
                 cleaned = []
                 for line in lines:
                     c = re.sub(r"^[\*\-•\d\.\)]+\s*", "", line).strip()
@@ -267,12 +373,7 @@ class AIService:
         except Exception as e:
             logger.warning(f"Bo'limlarni aniqlashda ogohlantirish: {e}")
 
-        return [
-            "1. Umumiy qoidalar va asosiy tushunchalar",
-            "2. Huquqlar, majburiyatlar va tartib-taomillar",
-            "3. Moliyaviy shartlar, muddatlar va javobgarlik",
-            "4. Nizolar, bekor qilish va yakuniy qoidalar"
-        ]
+        return default_sections
 
     async def analyze_document_section(
         self,
@@ -285,14 +386,6 @@ class AIService:
         """
         Hujjatning tanlangan aniq bo'limi yoki yo'nalishi bo'yicha chuqur, amaliy va to'liq tahlil
         """
-        if not self.is_configured():
-            return "⚠️ Gemini API kaliti kiritilmagan!"
-
-        if not self._client:
-            self._init_client()
-        if not self._client:
-            return "❌ AI mijozi bilan bog'lanishda xatolik."
-
         doc_instruction = (
             f"Siz yuqori malakali bosh yurist, tahlilchi va amaliy maslahatchisiz.\n"
             f"Foydalanuvchi '{filename}' nomli rasmiy hujjatni taqdim etdi va aynan quyidagi bo'lim / yo'nalish bo'yicha tahlil so'radi:\n"
@@ -311,17 +404,11 @@ class AIService:
 
         prompt = f"{doc_instruction}\n\n--- HUJJAT MATNI ---\n{doc_text[:85000]}"
 
-        try:
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text
-            return "Bo'lim bo'yicha tahlil natijasi olinmadi."
-        except Exception as e:
-            logger.exception(f"Bo'lim tahlili xatoligi: {e}")
-            return f"❌ <b>Bo'lim tahlilida xatolik:</b> {e}"
+        return await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=55.0,
+            operation_name=f"Hujjat bo'lim tahlili ({filename})"
+        )
 
     async def analyze_document(self, user_id: int, doc_text: str, filename: str, custom_prompt: Optional[str] = None) -> str:
         """
@@ -339,88 +426,53 @@ class AIService:
         """
         Mavjud tahlil yoki matnni tahrirlash (kengaytirish, qisqartirish, formatlash)
         """
-        if not self.is_configured():
-            return "⚠️ Gemini API kaliti kiritilmagan!"
-
-        if not self._client:
-            self._init_client()
-        if not self._client:
-            return "❌ AI mijozi bilan bog'lanishda xatolik."
-
         prompt = (
             f"Siz professional matn muharririsiz.\n"
             f"Quyidagi matnga ushbu topshiriqni bajaring: '{instruction}'.\n\n"
             f"--- ASL MATN ---\n{original_text}\n\n"
             f"Faqat yangilangan, to'liq va sayqallangan natijani bering."
         )
-
-        try:
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text
-            return "Tahrirlash natijasi olinmadi."
-        except Exception as e:
-            logger.exception(f"Matnni tahrirlashda xatolik: {e}")
-            return f"❌ <b>Tahrirlashda xatolik:</b> {e}"
+        return await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=40.0,
+            operation_name="Matnni tahrirlash"
+        )
 
     async def format_for_presentation(self, user_id: int, text: str) -> str:
         """
         Matnni PowerPoint slaydlariga mos struktura (# Slayd N:) ga aylantirish
         """
-        if not self.is_configured():
-            return text
-
-        if not self._client:
-            self._init_client()
-        if not self._client:
-            return text
-
         prompt = (
             "Ushbu matn asosida PowerPoint taqdimoti uchun 5-7 ta slayd ssenariysini tuzing.\n"
             "Har bir slaydni '## Slayd N: Sarlavha' shaklida boshlang va tagidan 3-4 ta muhim punkt ('* Punkt') yozing.\n\n"
             f"--- MATN ---\n{text[:10000]}"
         )
-        try:
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text
+        res = await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=35.0,
+            operation_name="PowerPoint formatlash"
+        )
+        if res.startswith("⚠️") or res.startswith("❌"):
             return text
-        except Exception:
-            return text
+        return res
 
     async def format_for_excel(self, user_id: int, text: str) -> str:
         """
         Matndagi ma'lumotlarni Excel jadvaliga mos Markdown table (| col1 | col2 | col3 |) ga aylantirish
         """
-        if not self.is_configured():
-            return text
-
-        if not self._client:
-            self._init_client()
-        if not self._client:
-            return text
-
         prompt = (
             "Ushbu ma'lumotlarni tartibli jadvalga aylantiring.\n"
             "Jadvalni Markdown formatida tuzing (| № | Bo'lim / Parametr | Tavsif / Ma'lumot | Izoh |):\n\n"
             f"--- MATN ---\n{text[:10000]}"
         )
-        try:
-            response = await self._client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text
+        res = await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=35.0,
+            operation_name="Excel formatlash"
+        )
+        if res.startswith("⚠️") or res.startswith("❌"):
             return text
-        except Exception:
-            return text
+        return res
 
 
 ai_service = AIService()

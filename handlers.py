@@ -855,6 +855,10 @@ async def handle_document_section_callback(callback: CallbackQuery):
         except Exception:
             pass
 
+        if analysis.startswith("⚠️") or analysis.startswith("❌"):
+            await callback.message.answer(analysis, parse_mode="HTML")
+            return
+
         title = f"{filename}: {section_title[:30]}"
         res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
         result_markup = get_document_result_keyboard(
@@ -1687,6 +1691,10 @@ async def handle_text_message(message: Message):
                 except Exception:
                     pass
 
+                if analysis.startswith("⚠️") or analysis.startswith("❌"):
+                    await message.answer(analysis, parse_mode="HTML")
+                    return
+
                 title = f"{filename}: {custom_query[:25]}"
                 res_id = store_result(title=title, content=analysis, user_name=user_name, user_id=user_id, category="doc")
                 result_markup = get_document_result_keyboard(res_id=res_id, doc_id=doc_id, current_sec_idx=None, has_next=False)
@@ -1821,6 +1829,10 @@ async def handle_text_message(message: Message):
         except Exception:
             pass
 
+        if analysis.startswith("⚠️") or analysis.startswith("❌"):
+            await message.answer(analysis, parse_mode="HTML")
+            return
+
         res_id = store_result(title="Hujjat tahlili", content=analysis, user_name=user_name, user_id=user_id, category="doc")
         await send_ai_response(message, analysis, res_id=res_id)
         return
@@ -1834,6 +1846,10 @@ async def handle_text_message(message: Message):
         await status_msg.delete()
     except Exception:
         pass
+
+    if response.startswith("⚠️") or response.startswith("❌"):
+        await message.answer(response, parse_mode="HTML")
+        return
 
     res_id = store_result(title=text[:30], content=response, user_name=user_name, user_id=user_id, category="chat")
     await send_ai_response(message, response, res_id=res_id)
