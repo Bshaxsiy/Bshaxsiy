@@ -81,6 +81,9 @@ result_store: dict[str, dict] = {}
 # Hujjat yuklanganda bo'lim tanlashni kutish: doc_id -> {user_id, user_name, filename, text, sections, caption, created_at}
 pending_docs: dict[str, dict] = {}
 
+# Shartnoma/hujjat yuklanganda da'vo yoki talabnoma tuzishni kutish: legal_id -> {user_id, user_name, filename, text, caption, created_at}
+legal_pending_docs: dict[str, dict] = {}
+
 
 def format_doc_title(filename: str, section_title: str = "", lang: str = "uz") -> str:
     """Hujjat va bo'lim nomini chiroyli, bo'shliqlari to'g'ri, imlo va tilga mos formatlash"""
@@ -210,6 +213,18 @@ def get_document_sections_keyboard(doc_id: str, sections: list, lang: str = "uz"
         InlineKeyboardButton(text=risks_label, callback_data=f"doc_sec:{doc_id}:risks"),
         InlineKeyboardButton(text=deadlines_label, callback_data=f"doc_sec:{doc_id}:deadlines")
     ])
+    legal_lawsuit_btn = (
+        "⚖️ Hujjatdan Da'vo arizasi" if lang == "uz" else
+        ("⚖️ Составить Иск по документу" if lang == "ru" else "⚖️ Lawsuit from Document")
+    )
+    legal_demand_btn = (
+        "📑 Talabnoma (Pretenziya)" if lang == "uz" else
+        ("📑 Составить Претензию" if lang == "ru" else "📑 Demand Letter")
+    )
+    kb.append([
+        InlineKeyboardButton(text=legal_lawsuit_btn, callback_data=f"doc_sec:{doc_id}:legal_lawsuit"),
+        InlineKeyboardButton(text=legal_demand_btn, callback_data=f"doc_sec:{doc_id}:legal_demand")
+    ])
     kb.append([InlineKeyboardButton(text=custom_label, callback_data=f"doc_sec:{doc_id}:custom")])
     kb.append([InlineKeyboardButton(text=cancel_label, callback_data=f"doc_sec:{doc_id}:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -239,6 +254,12 @@ def get_document_result_keyboard(res_id: str, doc_id: str = "", current_sec_idx:
 def get_legal_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     """Sudga da'vo va talabnoma bosh menyusi klaviaturasi"""
     kb = [
+        [
+            InlineKeyboardButton(
+                text="📎 Shartnoma yuklash (Word, PDF)" if lang == "uz" else ("📎 Загрузить договор (Word, PDF)" if lang == "ru" else "📎 Upload Contract (Word, PDF)"),
+                callback_data="legal_type:upload"
+            )
+        ],
         [
             InlineKeyboardButton(
                 text="🏛 Sudga Da'vo arizasi" if lang == "uz" else ("🏛 Исковое заявление в суд" if lang == "ru" else "🏛 Court Lawsuit"),
@@ -277,6 +298,37 @@ def get_legal_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="✍️ Erkin bayon qilish" if lang == "uz" else ("✍️ Свой запрос" if lang == "ru" else "✍️ Custom Case"),
                 callback_data="legal_type:free"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_legal_doc_action_keyboard(legal_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Yuklangan shartnoma/hujjat asosida qanday yuridik hujjat tayyorlashni tanlash klaviaturasi"""
+    kb = [
+        [
+            InlineKeyboardButton(
+                text="🏛 Sudga Da'vo arizasi tuzish" if lang == "uz" else ("🏛 Составить Исковое заявление в суд" if lang == "ru" else "🏛 Draft Court Lawsuit"),
+                callback_data=f"legal_act:{legal_id}:lawsuit"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📑 Sudgacha Talabnoma (Pretenziya)" if lang == "uz" else ("📑 Составить Досудебную Претензию" if lang == "ru" else "📑 Draft Pre-trial Demand Letter"),
+                callback_data=f"legal_act:{legal_id}:demand"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="⚡️ Da'vo va Talabnoma (Ikkalasi birga)" if lang == "uz" else ("⚡️ Иск и Претензия (Вместе)" if lang == "ru" else "⚡️ Both Lawsuit & Demand Letter"),
+                callback_data=f"legal_act:{legal_id}:both"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Shartnoma tahlili (Risklar va Muddatlar)" if lang == "uz" else ("📊 Анализ рисков и сроков" if lang == "ru" else "📊 Contract Risk Analysis"),
+                callback_data=f"legal_act:{legal_id}:analysis"
             )
         ]
     ]
@@ -1002,7 +1054,7 @@ async def nav_doc_analysis(message: Message):
 async def nav_legal_menu(message: Message):
     """⚖️ Sudga da'vo va talabnoma bo'limi"""
     user_id = message.from_user.id
-    user_active_mode[user_id] = "LEGAL_DOC:lawsuit"
+    user_active_mode[user_id] = "LEGAL_DOC:upload"
     lang = get_user_lang(user_id)
     await message.answer(
         t("legal_menu", lang),
@@ -1010,9 +1062,17 @@ async def nav_legal_menu(message: Message):
         reply_markup=get_section_keyboard(lang=lang)
     )
     prompt_txt = (
-        "👇 <b>Quyidagi yo'nalishlardan birini tanlang yoki o'z vaziyatingizni yozib yuboring:</b>" if lang == "uz" else
-        ("👇 <b>Выберите категорию или напишите детали вашего дела:</b>" if lang == "ru" else
-         "👇 <b>Select a category or type your case details:</b>")
+        "⚖️ <b>Sudga Da'vo arizasi va Talabnoma yaratish markazi:</b>\n\n"
+        "📎 Sizda tayyor shartnoma, tilxat yoki dalolatnoma bormi? <b>Faylni (Word .docx yoki PDF .pdf) to'g'ridan-to'g'ri shu yerga yuboring!</b> Bot shartnoma shartlarini to'liq o'rganib, rasmiy da'vo arizasi yoki talabnoma tayyorlab beradi.\n\n"
+        "👇 <b>Quyidagi yo'nalishlardan birini tanlang, shartnoma faylini (Word, PDF) yuboring yoki vaziyatingizni yozing:</b>"
+        if lang == "uz" else
+        ("⚖️ <b>Центр составления Исковых заявлений и Претензий:</b>\n\n"
+         "📎 У вас есть готовый договор, акт или расписка? <b>Отправьте файл (Word .docx или PDF .pdf) прямо сюда!</b> Бот изучит условия сделки и подготовит готовый иск в суд или претензию.\n\n"
+         "👇 <b>Выберите категорию, отправьте файл договора (Word, PDF) или напишите детали:</b>"
+         if lang == "ru" else
+         "⚖️ <b>Court Lawsuits & Demand Letters Center:</b>\n\n"
+         "📎 Do you have an existing agreement, promissory note, or contract? <b>Simply send the file (Word .docx or PDF .pdf) here!</b> AI will analyze clauses and draft an official lawsuit or demand letter.\n\n"
+         "👇 <b>Select an option below, upload your contract (Word, PDF), or describe your case:</b>")
     )
     await message.answer(
         prompt_txt,
@@ -1032,16 +1092,57 @@ async def handle_legal_callback(callback: CallbackQuery):
     await callback.answer()
 
     if data == "legal_nav:menu":
-        user_active_mode[user_id] = "LEGAL_DOC:lawsuit"
+        user_active_mode[user_id] = "LEGAL_DOC:upload"
         prompt_txt = (
-            "⚖️ <b>Sudga Da'vo arizasi va Talabnoma tuzish markazi:</b>\n\nKerakli yo'nalishni tanlang:" if lang == "uz" else
-            ("⚖️ <b>Центр составления Исковых заявлений и Претензий:</b>\n\nВыберите направление:" if lang == "ru" else
-             "⚖️ <b>Legal Lawsuits & Demand Letters:</b>\n\nSelect an area:")
+            "⚖️ <b>Sudga Da'vo arizasi va Talabnoma tuzish markazi:</b>\n\n"
+            "Mavjud shartnoma faylini (Word, PDF) yuboring yoki kerakli yo'nalishni tanlang:"
+            if lang == "uz" else
+            ("⚖️ <b>Центр составления Исковых заявлений и Претензий:</b>\n\n"
+             "Отправьте файл договора (Word, PDF) или выберите направление:"
+             if lang == "ru" else
+             "⚖️ <b>Legal Lawsuits & Demand Letters:</b>\n\n"
+             "Upload a contract file (Word, PDF) or select an area:")
         )
         try:
             await callback.message.edit_text(prompt_txt, parse_mode="HTML", reply_markup=get_legal_menu_keyboard(lang=lang))
         except Exception:
             await callback.message.answer(prompt_txt, parse_mode="HTML", reply_markup=get_legal_menu_keyboard(lang=lang))
+        return
+
+    if data == "legal_type:upload":
+        user_active_mode[user_id] = "LEGAL_DOC:upload"
+        upload_txt = (
+            "📎 <b>Shartnoma yoki yuridik hujjat faylini yuboring (Word .docx, PDF .pdf):</b>\n\n"
+            "Mavjud shartnoma, tilxat, dalolatnoma yoki kelishuv faylini botga jo'nating.\n\n"
+            "💡 <b>Bot qanday yordam beradi?</b>\n"
+            "1. Shartnoma taraflarini (Da'vogar va Javobgar rekvizitlari, STIR, JShShIR) aniqlaydi;\n"
+            "2. Shartnoma predmeti, muddati va to'lov shartlarini o'rganadi;\n"
+            "3. Muddati o'tgan qarz, penya yoki zararni hisoblaydi;\n"
+            "4. Qonunchilik moddalari va davlat boji hisob-kitobi bilan sudga tayyor <b>Da'vo arizasi</b> yoki <b>Talabnoma</b> tayyorlaydi!\n\n"
+            "👇 <i>Hozir shartnoma faylini (Word yoki PDF) shu yerga jo'nating:</i>"
+            if lang == "uz" else
+            ("📎 <b>Отправьте файл договора или документа (Word .docx, PDF .pdf):</b>\n\n"
+             "Прикрепите и отправьте файл договора, расписки, соглашения или акта.\n\n"
+             "💡 <b>Что сделает бот:</b>\n"
+             "1. Определит стороны (Истец и Ответчик, реквизиты, ИНН, ПИНФЛ);\n"
+             "2. Проанализирует условия сделки, сроки и порядок оплаты;\n"
+             "3. Рассчитает сумму долга, штрафных санкций и убытков;\n"
+             "4. Подготовит <b>Исковое заявление в суд</b> или <b>Претензию</b> со всеми нормами законов и расчетом госпошлины!\n\n"
+             "👇 <i>Отправьте файл договора (Word или PDF) прямо сейчас:</i>"
+             if lang == "ru" else
+             "📎 <b>Upload your contract or legal document (Word .docx, PDF .pdf):</b>\n\n"
+             "Upload your contract, agreement, or breach notice.\n\n"
+             "💡 <b>What AI will do:</b>\n"
+             "1. Extract Plaintiff and Defendant details;\n"
+             "2. Analyze terms, obligations, and deadlines;\n"
+             "3. Calculate outstanding debt, interest, and damages;\n"
+             "4. Draft an official <b>Court Lawsuit</b> or <b>Pre-trial Demand Letter</b> ready for filing!\n\n"
+             "👇 <i>Send your file (Word or PDF) now:</i>")
+        )
+        try:
+            await callback.message.edit_text(upload_txt, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(upload_txt, parse_mode="HTML")
         return
 
     if data == "legal_type:templates":
@@ -1060,6 +1161,145 @@ async def handle_legal_callback(callback: CallbackQuery):
     user_active_mode[user_id] = f"LEGAL_DOC:{subtype}"
     guide_text = get_legal_guidance_text(subtype, lang=lang)
     await callback.message.answer(guide_text, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("legal_act:"))
+async def handle_legal_action_callback(callback: CallbackQuery):
+    """Yuklangan shartnoma bo'yicha harakat (da'vo, talabnoma, ikkalasi yoki tahlil) callbacki"""
+    data = callback.data
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+    await callback.answer()
+
+    parts = data.split(":")
+    if len(parts) < 3:
+        return
+    legal_id = parts[1]
+    action = parts[2]
+
+    pending = legal_pending_docs.get(legal_id)
+    if not pending:
+        await callback.message.answer(
+            "❌ Hujjat keshdan o'chirilgan yoki muddati tugagan. Iltimos, faylni qayta yuboring." if lang == "uz" else
+            ("❌ Документ устарел или не найден. Пожалуйста, отправьте файл снова." if lang == "ru" else
+             "❌ Document expired. Please upload the file again.")
+        )
+        return
+
+    if action == "analysis":
+        status_msg = await callback.message.answer(
+            "📊 <i>Shartnoma bo'limlari tahlil qilinmoqda...</i>" if lang == "uz" else
+            ("📊 <i>Анализ разделов договора...</i>" if lang == "ru" else "📊 <i>Analyzing contract sections...</i>"),
+            parse_mode="HTML"
+        )
+        doc_id = uuid.uuid4().hex[:8]
+        filename = pending["filename"]
+        extracted_text = pending["text"]
+        sections = await ai_service.detect_document_sections(extracted_text, filename, lang=lang)
+        pending_docs[doc_id] = {
+            "user_id": user_id,
+            "user_name": pending.get("user_name", "Foydalanuvchi"),
+            "filename": filename,
+            "text": extracted_text,
+            "sections": sections,
+            "caption": pending.get("caption", ""),
+            "created_at": datetime.now()
+        }
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await callback.message.answer(
+            f"📄 <b>«{filename}» bo'limlari:</b>",
+            parse_mode="HTML",
+            reply_markup=get_document_sections_keyboard(doc_id, sections, lang=lang)
+        )
+        return
+
+    status_msg = await callback.message.answer(
+        "⚖️ <i>Yuridik hujjat tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+        ("⚖️ <i>Формируется юридический документ, пожалуйста подождите...</i>" if lang == "ru" else
+         "⚖️ <i>Drafting legal document, please wait...</i>"),
+        parse_mode="HTML"
+    )
+    await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+    await generate_legal_from_file(callback.message, status_msg, legal_id, action, lang=lang)
+
+
+async def generate_legal_from_file(message: Message, status_msg: Message, legal_id: str, doc_subtype: str, lang: str = "uz"):
+    """Yuklangan shartnoma matnidan AI orqali yuridik hujjat shakllantirish"""
+    data = legal_pending_docs.get(legal_id)
+    if not data:
+        await message.answer("❌ Hujjat ma'lumotlari topilmadi yoki eskirgan. Iltimos, faylni qayta yuboring.")
+        return
+
+    filename = data["filename"]
+    extracted_text = data["text"]
+    caption = data.get("caption", "")
+    user_id = data["user_id"]
+    user_name = data.get("user_name", "Foydalanuvchi")
+
+    target_name = (
+        "Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+        ("Sudgacha Talabnoma (Pretenziya)" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
+         "Da'vo arizasi va Talabnoma to'plami")
+    )
+    if lang == "ru":
+        target_name = (
+            "Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            ("Досудебная претензия" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
+             "Комплект: Иск и Претензия")
+        )
+    elif lang == "en":
+        target_name = (
+            "Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            ("Demand Letter" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
+             "Lawsuit & Demand Package")
+        )
+
+    proc_txt = (
+        f"⚖️ <i>«{filename}» hujjati asosida <b>«{target_name}»</b> tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+        (f"⚖️ <i>На основе «{filename}» готовится <b>«{target_name}»</b>, пожалуйста подождите...</i>" if lang == "ru" else
+         f"⚖️ <i>Drafting <b>«{target_name}»</b> based on «{filename}», please wait...</i>")
+    )
+    try:
+        await status_msg.edit_text(proc_txt, parse_mode="HTML")
+    except Exception:
+        status_msg = await message.answer(proc_txt, parse_mode="HTML")
+
+    legal_details = (
+        f"Ilova qilingan shartnoma/hujjat fayli: {filename}\n"
+        f"Hujjatning to'liq matni:\n{extracted_text}\n"
+        f"Foydalanuvchi izohi va qo'shimcha faktlari: {caption}"
+    )
+
+    legal_doc = await ai_service.generate_legal_document(
+        user_id=user_id,
+        doc_type=doc_subtype,
+        details=legal_details,
+        lang=lang
+    )
+
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    if legal_doc.startswith("⚠️") or legal_doc.startswith("❌"):
+        await message.answer(legal_doc, parse_mode="HTML")
+        return
+
+    title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma")
+    if lang == "ru":
+        title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Претензия" if doc_subtype != "both" else "Иск и Претензия")
+    elif lang == "en":
+        title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")
+
+    clean_fn = format_doc_title(filename, "", lang=lang)
+    title = f"{title_prefix}: {clean_fn}"
+    res_id = store_result(title=title, content=legal_doc, user_name=user_name, user_id=user_id, category="legal")
+    result_markup = get_legal_result_keyboard(res_id=res_id, lang=lang)
+    await send_ai_response(message, legal_doc, res_id=res_id, reply_markup=result_markup, lang=lang)
 
 
 @router.message(F.text.in_(get_all_button_variants("btn_translator")))
@@ -1344,41 +1584,70 @@ async def handle_document_upload(message: Message):
 
         # 1. LEGAL_DOC rejimida hujjat (shartnoma, tilxat, dalolatnoma va h.k.) yuborilgan bo'lsa
         if current_mode.startswith("LEGAL_DOC"):
-            doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
-            await status_msg.edit_text(
-                f"⚖️ <i>«{filename}» hujjati asosida da'vo / talabnoma tuzilmoqda, iltimos kuting...</i>" if lang == "uz" else
-                (f"⚖️ <i>На основе документа «{filename}» составляется иск / претензия, пожалуйста подождите...</i>" if lang == "ru" else
-                 f"⚖️ <i>Drafting legal document based on «{filename}», please wait...</i>"),
-                parse_mode="HTML"
-            )
-            legal_details = f"Ilova qilingan shartnoma/hujjat: {filename}\nHujjat matni:\n{extracted_text[:35000]}\nFoydalanuvchi izohi: {caption}"
-            legal_doc = await ai_service.generate_legal_document(
-                user_id=user_id,
-                doc_type=doc_subtype,
-                details=legal_details,
-                lang=lang
+            doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "upload"
+            legal_id = uuid.uuid4().hex[:8]
+            legal_pending_docs[legal_id] = {
+                "user_id": user_id,
+                "user_name": message.from_user.full_name if message.from_user else "Foydalanuvchi",
+                "filename": filename,
+                "text": extracted_text[:35000],
+                "caption": caption,
+                "created_at": datetime.now()
+            }
+            if len(legal_pending_docs) > 100:
+                oldest = next(iter(legal_pending_docs))
+                legal_pending_docs.pop(oldest, None)
+
+            # Agar izoh (caption) orqali yoki aniq shablon orqali ma'lum bo'lsa:
+            auto_type = None
+            cap_lower = caption.lower()
+            if any(w in cap_lower for w in ["talabnoma", "претензия", "demand"]):
+                auto_type = "demand"
+            elif any(w in cap_lower for w in ["da'vo", "davo", "иск", "lawsuit", "claim"]):
+                auto_type = "lawsuit"
+            elif doc_subtype in ("debt", "contract", "alimony", "divorce", "labor", "damage"):
+                auto_type = doc_subtype
+            elif doc_subtype in ("demand", "demand_debt", "demand_quality"):
+                auto_type = doc_subtype
+
+            if auto_type:
+                await generate_legal_from_file(message, status_msg, legal_id, auto_type, lang=lang)
+                return
+
+            char_count = len(extracted_text)
+            choice_prompt = (
+                f"📄 <b>«{filename}» shartnomasi / hujjati qabul qilindi!</b>\n\n"
+                f"📊 <b>Hajmi:</b> taxminan {char_count:,} ta belgi matn\n\n"
+                f"🎯 <b>Ushbu shartnoma/hujjat asosida qanday yuridik hujjat tayyorlaymiz?</b>\n\n"
+                f"1️⃣ 🏛 <b>Sudga Da'vo arizasi</b> — shartnoma bo'yicha qarz, penya va zararlarni sud orqali majburiy undirish;\n"
+                f"2️⃣ 📑 <b>Sudgacha Talabnoma (Pretenziya)</b> — ikkinchi tarafga 10 kun ichida to'lash yoki kamchilikni bartaraf etish talabi;\n"
+                f"3️⃣ ⚡️ <b>Da'vo va Talabnoma (Ikkalasi birga)</b> — ikkala hujjatni to'liq komplekt holda tayyorlash;\n"
+                f"4️⃣ 📊 <b>Shartnoma tahlili</b> — huquqlar, majburiyatlar va risklar tahlili.\n\n"
+                f"👇 <i>Kerakli amalni tanlang:</i>"
+                if lang == "uz" else
+                (f"📄 <b>Договор / документ «{filename}» успешно принят!</b>\n\n"
+                 f"📊 <b>Объем:</b> около {char_count:,} знаков текста\n\n"
+                 f"🎯 <b>Какой юридический документ составить на основе этого файла?</b>\n\n"
+                 f"1️⃣ 🏛 <b>Исковое заявление в суд</b> — принудительное взыскание долга, неустойки и убытков;\n"
+                 f"2️⃣ 📑 <b>Досудебная претензия</b> — официальное требование контрагенту о погашении задолженности;\n"
+                 f"3️⃣ ⚡️ <b>Иск и Претензия (Вместе)</b> — сформировать оба документа одновременно;\n"
+                 f"4️⃣ 📊 <b>Анализ договора</b> — анализ рисков, санкций и сроков.\n\n"
+                 f"👇 <i>Выберите действие:</i>"
+                 if lang == "ru" else
+                 f"📄 <b>Document «{filename}» received successfully!</b>\n\n"
+                 f"📊 <b>Size:</b> approx. {char_count:,} characters\n\n"
+                 f"🎯 <b>Which legal document should we draft based on this file?</b>\n\n"
+                 f"1️⃣ 🏛 <b>Court Lawsuit</b> — formal court claim for debt, interest, and damages;\n"
+                 f"2️⃣ 📑 <b>Pre-trial Demand Letter</b> — formal breach notice with cure period;\n"
+                 f"3️⃣ ⚡️ <b>Both Lawsuit & Demand Letter</b> — draft the complete litigation package;\n"
+                 f"4️⃣ 📊 <b>Contract Risk Analysis</b> — examine rights, liabilities, and risks.\n\n"
+                 f"👇 <i>Choose an action below:</i>")
             )
             try:
                 await status_msg.delete()
             except Exception:
                 pass
-
-            if legal_doc.startswith("⚠️") or legal_doc.startswith("❌"):
-                await message.answer(legal_doc, parse_mode="HTML")
-                return
-
-            title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Talabnoma"
-            if lang == "ru":
-                title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Претензия"
-            elif lang == "en":
-                title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Demand Letter"
-
-            clean_fn = format_doc_title(filename, "", lang=lang)
-            title = f"{title_prefix}: {clean_fn}"
-            user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
-            res_id = store_result(title=title, content=legal_doc, user_name=user_name, user_id=user_id, category="legal")
-            result_markup = get_legal_result_keyboard(res_id=res_id, lang=lang)
-            await send_ai_response(message, legal_doc, res_id=res_id, reply_markup=result_markup, lang=lang)
+            await message.reply(choice_prompt, parse_mode="HTML", reply_markup=get_legal_doc_action_keyboard(legal_id, lang=lang))
             return
 
         # 1.5. TRANSLATOR rejimida hujjat yuborilgan bo'lsa
@@ -1555,6 +1824,46 @@ async def handle_document_section_callback(callback: CallbackQuery):
              "<i>(Example: «Analyze articles 22 to 38» or «Asset seizure and auction procedures»)</i>")
         )
         await callback.message.answer(custom_msg, parse_mode="HTML")
+        return
+
+    if action == "legal_lawsuit":
+        legal_id = uuid.uuid4().hex[:8]
+        legal_pending_docs[legal_id] = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "filename": filename,
+            "text": text[:35000],
+            "caption": doc_data.get("caption", ""),
+            "created_at": datetime.now()
+        }
+        status_msg = await callback.message.answer(
+            "⚖️ <i>Ushbu hujjat asosida Sudga Da'vo arizasi tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("⚖️ <i>Формируется Исковое заявление в суд на основе документа...</i>" if lang == "ru" else
+             "⚖️ <i>Drafting Court Lawsuit based on the document...</i>"),
+            parse_mode="HTML"
+        )
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+        await generate_legal_from_file(callback.message, status_msg, legal_id, "lawsuit", lang=lang)
+        return
+
+    if action == "legal_demand":
+        legal_id = uuid.uuid4().hex[:8]
+        legal_pending_docs[legal_id] = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "filename": filename,
+            "text": text[:35000],
+            "caption": doc_data.get("caption", ""),
+            "created_at": datetime.now()
+        }
+        status_msg = await callback.message.answer(
+            "📑 <i>Ushbu hujjat asosida Sudgacha Talabnoma (Pretenziya) tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("📑 <i>Формируется Досудебная претензия на основе документа...</i>" if lang == "ru" else
+             "📑 <i>Drafting Pre-trial Demand Letter based on the document...</i>"),
+            parse_mode="HTML"
+        )
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+        await generate_legal_from_file(callback.message, status_msg, legal_id, "demand", lang=lang)
         return
 
     # Bo'lim nomini aniqlash
@@ -2766,6 +3075,75 @@ async def handle_photo_message(message: Message):
     user_id = message.from_user.id
     lang = get_user_lang(user_id)
     caption = message.caption or ""
+    current_mode = user_active_mode.get(user_id, "NORMAL")
+
+    # Agar yuridik (LEGAL_DOC) rejimida rasm (tilxat, shartnoma, chek) yuborilgan bo'lsa:
+    if current_mode.startswith("LEGAL_DOC"):
+        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
+        target_name = (
+            "Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            ("Talabnoma (Pretenziya)" if doc_subtype != "both" else "Da'vo va Talabnoma")
+        )
+        if lang == "ru":
+            target_name = (
+                "Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+                ("Досудебная претензия" if doc_subtype != "both" else "Иск и Претензия")
+            )
+        elif lang == "en":
+            target_name = (
+                "Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+                ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")
+            )
+
+        wait_legal = (
+            f"⚖️ <i>Rasm / tilxat o'rganilib, «{target_name}» tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+            (f"⚖️ <i>Анализируется фото / расписка и составляется «{target_name}»...</i>" if lang == "ru" else
+             f"⚖️ <i>Analyzing photo / promissory note and drafting «{target_name}»...</i>")
+        )
+        status_msg = await message.reply(wait_legal, parse_mode="HTML")
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+        try:
+            photo = message.photo[-1]
+            file_info = await message.bot.get_file(photo.file_id)
+            photo_bytes_io = io.BytesIO()
+            await message.bot.download_file(file_info.file_path, destination=photo_bytes_io)
+            photo_bytes = photo_bytes_io.getvalue()
+
+            legal_extract_prompt = (
+                f"Ushbu rasmda yuridik hujjat (qarz tilxati, shartnoma, dalolatnoma yoki chek) aks etgan.\n"
+                f"Foydalanuvchi izohi: {caption}\n"
+                f"Iltimos, rasmdagi barcha yozuvlarni, sanalarni, taraflarning ism-familiyalarini, qarz yoki to'lov summasini to'liq o'qib bering."
+            )
+            extracted_facts = await ai_service.ask_gemini(
+                user_id=user_id,
+                prompt=legal_extract_prompt,
+                image_bytes=photo_bytes,
+                mime_type="image/jpeg"
+            )
+
+            legal_details = f"Rasmda aks etgan hujjat/tilxat ma'lumotlari:\n{extracted_facts}\nFoydalanuvchi izohi: {caption}"
+            legal_doc = await ai_service.generate_legal_document(
+                user_id=user_id,
+                doc_type=doc_subtype,
+                details=legal_details,
+                lang=lang
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+            title = f"{target_name}: Rasm / Tilxat asosida"
+            user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
+            res_id = store_result(title=title, content=legal_doc, user_name=user_name, user_id=user_id, category="legal")
+            result_markup = get_legal_result_keyboard(res_id=res_id, lang=lang)
+            await send_ai_response(message, legal_doc, res_id=res_id, reply_markup=result_markup, lang=lang)
+            return
+        except Exception as e:
+            logger.exception(f"Rasmdan yuridik hujjat tuzishda xatolik: {e}")
+            await status_msg.edit_text("❌ Rasm orqali da'vo/talabnoma tuzishda xatolik yuz berdi.", parse_mode="HTML")
+            return
 
     wait_photo = (
         "🤔 <i>Rasm tahlil qilinmoqda...</i>" if lang == "uz" else

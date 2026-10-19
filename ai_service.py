@@ -701,6 +701,10 @@ class AIService:
         type_titles = {
             "lawsuit": "Sudga Da'vo arizasi",
             "demand": "Sudgacha Talabnoma (Pretenziya)",
+            "both": "Sudgacha Talabnoma (Pretenziya) va Sudga Da'vo arizasi (To'liq to'plam)",
+            "upload": "Shartnoma/Hujjat asosida Sudga Da'vo arizasi",
+            "contract_lawsuit": "Shartnoma bo'yicha Sudga Da'vo arizasi",
+            "contract_demand": "Shartnoma bo'yicha Sudgacha Talabnoma (Pretenziya)",
             "debt": "Qarz va penya undirish to'g'risida Da'vo arizasi",
             "contract": "Shartnoma majburiyatlarini buzganlik bo'yicha Da'vo arizasi",
             "alimony": "Aliment undirish to'g'risida Da'vo arizasi",
@@ -752,6 +756,10 @@ class AIService:
                 "     «___» _________ 202__ года        Истец: _______________ / Подпись / Ф.И.О.\n\n"
                 "3. Если пользователь не указал конкретные персональные данные (паспорт, номер договора), укажите понятные маркеры в скобках [Ф.И.О. истца: ...], но ВСЮ правовую аргументацию, расчеты и статьи напишите полно, профессионально и готово к подаче.\n"
                 "4. Выдайте сразу готовый официальный документ без вводных фраз."
+                + ("\n\nВАЖНО: Поскольку запрошен полный комплект (doc_type='both'), составьте документ из двух последовательных частей:\n"
+                   "ЧАСТЬ 1: ДОСУДЕБНАЯ ПРЕТЕНЗИЯ (с 10-дневным сроком погашения и реквизитами);\n"
+                   "---\n"
+                   "ЧАСТЬ 2: ИСКОВОЕ ЗАЯВЛЕНИЕ В СУД (со всеми статьями ГК/ГПК, расчетом госпошлины и приложениями)." if doc_type == "both" else "")
             )
         elif lang == "en":
             prompt = (
@@ -762,6 +770,10 @@ class AIService:
                 "1. Flawless, professional legal English.\n"
                 "2. Standard litigation layout: Court Caption, Plaintiff and Defendant info, Claim value, State fees, Title, Factual background, Statutory grounds, Pre-trial compliance, Prayer for relief (WHEREFORE / PRAYER FOR RELIEF), List of exhibits, Date and signature block.\n"
                 "3. Provide the complete ready-to-file document immediately without conversational filler."
+                + ("\n\nNOTE: Since both documents are requested (doc_type='both'), provide two distinct parts:\n"
+                   "PART 1: FORMAL DEMAND LETTER (NOTICE OF CLAIM)\n"
+                   "---\n"
+                   "PART 2: COURT LAWSUIT / STATEMENT OF CLAIM" if doc_type == "both" else "")
             )
         else:
             prompt = (
@@ -803,6 +815,10 @@ class AIService:
                 "     202__ yil «___» ____________        Da'vogar: _________________ (F.I.Sh.)\n\n"
                 "3. Agar foydalanuvchi ma'lum shaxsiy rekvizitlarni (masalan pasport raqami, aniq uy manzili) aytmagan bo'lsa, ularni [Da'vogarning manzili: ...] kabi aniq qavslarda qoldiring, lekin yuridik matn, moddalar, qarz hisob-kitobi va talablarni 100% to'liq va professional darajada shakllantiring.\n"
                 "4. To'g'ridan-to'g'ri rasmiy hujjat matnini chiqaring, ortiqcha salom-alik yoki kirish so'zlarini qo'shmang."
+                + ("\n\nMUHIM QOIDA: To'liq to'plam so'ralganligi sababli (doc_type='both'), hujjatni ketma-ket 2 ta qismdan iborat qiling:\n"
+                   "1-QISM: SUDGACHA TALABNOMA (PRETENZIYA) (ixtiyoriy to'lash uchun 10 kunlik muddat va bank rekvizitlari bilan);\n"
+                   "---\n"
+                   "2-QISM: SUDGA DA'VO ARIZASI (Fuqarolik/Iqtisodiy sudga barcha moddalar, davlat boji hisob-kitobi va ilovalar ro'yxati bilan)." if doc_type == "both" else "")
             )
 
         return await self.generate_content_with_fallback(
