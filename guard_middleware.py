@@ -9,18 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_request_access_keyboard() -> InlineKeyboardMarkup:
-    """ Ruxsati yo'q foydalanuvchilar uchun klaviatura """
+    """ Ruxsati yo'q foydalanuvchilar uchun klaviatura: FAQAT yagona ruxsat so'rovi tugmasi """
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
                 text="📩 Administratorga ruxsat so'rovi yuborish",
                 callback_data="auth_request_access"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🔑 Admin sifatida kirish yo'riqnomasi",
-                callback_data="auth_admin_hint"
             )
         ]
     ])
@@ -98,6 +92,19 @@ class GuardMiddleware(BaseMiddleware):
 
             # Standart bloklash xabari
             username_display = f"@{user.username}" if user.username else "mavjud emas"
+
+            if access_guard.is_request_pending(user_id):
+                await event.reply(
+                    "🛡 <b>KIRISH CHEKLANGAN! (QO'RIQCHI TIZIMI)</b>\n\n"
+                    "Kechirasiz, ushbu bot faqat ruxsat berilgan cheklangan foydalanuvchilar uchun xizmat ko'rsatadi.\n\n"
+                    f"👤 <b>Ismingiz:</b> {user.full_name}\n"
+                    f"🔗 <b>Username:</b> {username_display}\n"
+                    f"🆔 <b>Sizning Telegram ID:</b> <code>{user_id}</code>\n\n"
+                    "⏳ <b>Ruxsat so'rovingiz administratorga yuborilgan.</b> Iltimos, administrator tasdiqlashini kuting.",
+                    parse_mode="HTML"
+                )
+                return
+
             await event.reply(
                 "🛡 <b>KIRISH CHEKLANGAN! (QO'RIQCHI TIZIMI)</b>\n\n"
                 "Kechirasiz, ushbu bot faqat ruxsat berilgan cheklangan foydalanuvchilar uchun xizmat ko'rsatadi.\n\n"
