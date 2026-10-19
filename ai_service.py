@@ -702,6 +702,9 @@ class AIService:
             "lawsuit": "Sudga Da'vo arizasi",
             "demand": "Sudgacha Talabnoma (Pretenziya)",
             "both": "Sudgacha Talabnoma (Pretenziya) va Sudga Da'vo arizasi (To'liq to'plam)",
+            "debt_cert": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
+            "debt_certificate": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
+            "malumotnoma": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
             "upload": "Shartnoma/Hujjat asosida Sudga Da'vo arizasi",
             "contract_lawsuit": "Shartnoma bo'yicha Sudga Da'vo arizasi",
             "contract_demand": "Shartnoma bo'yicha Sudgacha Talabnoma (Pretenziya)",
@@ -717,7 +720,124 @@ class AIService:
         }
         type_name = type_titles.get(doc_type, "Sudga Da'vo arizasi / Talabnoma")
 
-        if lang == "ru":
+        if doc_type in ("debt_cert", "debt_certificate", "malumotnoma"):
+            if lang == "ru":
+                prompt = (
+                    "Вы — главный юрисконсульт и главный бухгалтер-аудитор высшей квалификации.\n\n"
+                    "ЗАДАЧА: На основе предоставленных пользователем документов (договор, акт сверки взаиморасчетов, счета-фактуры, претензия или иск) "
+                    "составьте официальный комплект документов: «СПРАВКА О ЗАДОЛЖЕННОСТИ И НЕУСТОЙКЕ + СОПРОВОДИТЕЛЬНОЕ ПИСЬМО».\n\n"
+                    f"ИСХОДНЫЕ ДАННЫЕ И МАТЕРИАЛЫ:\n{details}\n\n"
+                    "🔴 СТРОГИЕ ТРЕБОВАНИЯ К ОФОРМЛЕНИЮ И СТРУКТУРЕ (ОБЯЗАТЕЛЬНО 2 ЧАСТИ ЧЕРЕЗ РАЗДЕЛИТЕЛЬ '---'):\n\n"
+                    "ЧАСТЬ 1: СОПРОВОДИТЕЛЬНОЕ ПИСЬМО (KUZATUV / ILOWA XATI)\n"
+                    "• Фирменный бланк организации-кредитора (Наименование, ИНН, адрес, р/счет, банк, МФО, телефон, e-mail);\n"
+                    "• Исходящий номер и дата: Исх. № ____ от «___» ___________ 202_ г.;\n"
+                    "• Адресат: В [Наименование суда] или Руководителю [Наименование организации должника];\n"
+                    "• Заголовок по центру: СОПРОВОДИТЕЛЬНОЕ ПИСЬМО\n"
+                    "• Текст письма: Направляем Вам Справку о состоянии взаимных расчетов и задолженности по Договору № ___ от «___» ________ 202_ г. и Акту сверки взаиморасчетов для рассмотрения и приобщения к материалам дела / удовлетворения требований;\n"
+                    "• Перечень приложений (Приложение: 1. Справка о задолженности на __ л. в 1 экз.; 2. Копия акта сверки; 3. Копии счетов-фактур и накладных);\n"
+                    "• Подпись: Руководитель (Директор): _______________ / Ф.И.О. / М.П.\n\n"
+                    "---\n\n"
+                    "ЧАСТЬ 2: СПРАВКА О ЗАДОЛЖЕННОСТИ И РАСЧЕТЕ НЕУСТОЙКИ\n"
+                    "• Шапка с реквизитами кредитора и адресата (В суд / Должнику);\n"
+                    "• Заголовок по центру: СПРАВКА О ЗАДОЛЖЕННОСТИ\n"
+                    "  (по Договору № ___ от «___» ________ 202_ г. и Акту сверки взаиморасчетов)\n"
+                    "• Вводная часть: Настоящая справка выдана [Наименование кредитора] в том, что по состоянию на «___» ________ 202_ г. задолженность [Наименование должника, ИНН] составляет следующую сумму:\n"
+                    "• ТАБЛИЦА РАСЧЕТА (Обязательно в формате Markdown таблицы: | № | Документ (Счет-фактура / Накладная / Акт) | Дата | Сумма поставки / оказанных услуг (сум) | Оплачено (сум) | Остаток долга (сум) | Срок оплаты по договору | Дней просрочки | Начисленная пеня (сум) |);\n"
+                    "• Строка «ИТОГО:» с подсчетом суммы основного долга и суммы неустойки/пени;\n"
+                    "• СУММА ПРОПИСЬЮ И ЦИФРАМИ:\n"
+                    "  - Сумма основного долга: ... (...) сум;\n"
+                    "  - Сумма пени/неустойки: ... (...) сум;\n"
+                    "  - ВСЕГО К ВЗЫСКАНИЮ: ... (...) сум;\n"
+                    "• Правовое и бухгалтерское обоснование: Закон РУз «О бухгалтерском учете» (статьи 14, 19), Гражданский кодекс РУз (статьи 236, 237, 327, 333), условия договора и акт сверки взаиморасчетов;\n"
+                    "• Подтверждение достоверности: «Справка составлена на основании первичных бухгалтерских документов, выписок банка и акта сверки взаиморасчетов. Правильность расчетов подтверждаем:»;\n"
+                    "• ДВЕ ПОДПИСИ:\n"
+                    "  Руководитель организации: _______________ (Ф.И.О.)\n"
+                    "  Главный бухгалтер: _______________ (Ф.И.О.)\n"
+                    "  М.П. (Место печати)\n\n"
+                    "100% чистый русский язык, точные цифры из предоставленных данных, без лишних вводных реплик."
+                )
+            elif lang == "en":
+                prompt = (
+                    "You are a senior legal counsel and certified public accountant (CPA).\n\n"
+                    "TASK: Based on the provided documents (contract, reconciliation statement, invoices, lawsuit or demand letter), "
+                    "draft a complete official document set: «STATEMENT / CERTIFICATE OF INDEBTEDNESS + COVER LETTER».\n\n"
+                    f"SOURCE DATA:\n{details}\n\n"
+                    "🔴 STRICT FORMAT REQUIREMENTS (MUST HAVE 2 PARTS SEPARATED BY '---'):\n\n"
+                    "PART 1: FORMAL TRANSMITTAL / COVER LETTER\n"
+                    "• Corporate letterhead of Creditor (Company name, Tax ID, address, bank details, contact info);\n"
+                    "• Reference No. and Date: Ref: _____ Date: ____________;\n"
+                    "• Addressee: To the [Court Name] or Managing Director of [Debtor Company];\n"
+                    "• Centered Title: FORMAL TRANSMITTAL / COVER LETTER\n"
+                    "• Statement enclosing the official Certificate of Indebtedness and reconciliation records;\n"
+                    "• Enclosures list (1. Certificate of Indebtedness; 2. Reconciliation Act; 3. Invoices/Receipts);\n"
+                    "• Signature: Managing Director / CEO: _______________ (Full Name) [Seal / Stamp]\n\n"
+                    "---\n\n"
+                    "PART 2: CERTIFICATE OF INDEBTEDNESS AND PENALTY BREAKDOWN\n"
+                    "• Header and Addressee;\n"
+                    "• Centered Title: CERTIFICATE OF INDEBTEDNESS\n"
+                    "• Factual background regarding contract reference, delivery dates, and payment defaults;\n"
+                    "• ITEMIZED BREAKDOWN TABLE in Markdown (| No. | Document Ref / Invoice | Date | Amount Incurred | Amount Paid | Outstanding Balance | Due Date | Overdue Days | Accrued Penalty |);\n"
+                    "• TOTAL ROW summarizing principal debt and penalty;\n"
+                    "• SUM IN WORDS AND FIGURES (Principal debt, contractual penalties, total claim amount);\n"
+                    "• Legal and accounting grounds (Law on Accounting, Civil Code performance and breach articles, contractual terms);\n"
+                    "• Certification statement of accuracy based on primary ledger records;\n"
+                    "• DUAL SIGNATURE BLOCK:\n"
+                    "  Managing Director: _______________ (Full Name)\n"
+                    "  Chief Accountant: _______________ (Full Name)\n"
+                    "  Corporate Seal (L.S.)\n\n"
+                    "Flawless professional English, exact financial calculations based on input, no conversational filler."
+                )
+            else:
+                prompt = (
+                    "Siz O'zbekiston Respublikasining bosh yuristkonsulti va oliy toifali bosh buxgalter-auditorisiz.\n\n"
+                    "VAZIFA: Foydalanuvchi taqdim etgan shartnoma, o'zaro hisob-kitob solishtiruvi dalolatnomasi (akt sverki), "
+                    "hisob-fakturalar, da'vo arizasi yoki talabnoma ma'lumotlari asosida sudga yoki debitorga taqdim etiladigan "
+                    "rasmiy va qonuniy to'liq hujjatlar to'plami: «QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA + ILOVA XATI»ni tuzib bering.\n\n"
+                    f"FOYDALANUVCHI TAQDIM ETGAN HUJJAT VA MA'LUMOTLAR:\n{details}\n\n"
+                    "🔴 QAT'IY TALABLAR (HUJJAT KETMA-KET 2 TA QISMDAN IBORAT BO'LIB, O'RTASIDA '---' AJRATKICHI BO'LISHI SHART):\n\n"
+                    "1-QISM: RASMIY ILOVA XATI (KUZATUV XATI)\n"
+                    "• Tashkilot rasmiy blankasi / rekvizitlari (Kreditor tashkilot nomi, STIR/INN, yuridik manzili, hisob-raqami, bank nomi, MFO, telefon, elektron pochta);\n"
+                    "• Chiqish raqami va sana: Chiqish № _____ 202_ yil «___» ___________\n"
+                    "• Kimga: [Tegishli tumanlararo iqtisodiy / fuqarolik sudiga yoki Qarzdor tashkilot rahbariga];\n"
+                    "• Katta sarlavha: ILOVA XATI\n"
+                    "• Matn: [Kreditor tashkilot nomi] va [Qarzdor tashkilot nomi] o'rtasida tuzilgan [Sana] dagi [№] -sonli Shartnoma hamda o'zaro hisob-kitob solishtiruvi dalolatnomasi bo'yicha vujudga kelgan qarzdorlik yuzasidan tayyorlangan rasmiy «Qarzdorlik va hisoblangan penya to'g'risida Ma'lumotnoma»ni ko'rib chiqish / da'vo arizasiga ilova qilish uchun taqdim etamiz;\n"
+                    "• Ilovalar ro'yxati:\n"
+                    "  1. Qarzdorlik va penya to'g'risida Ma'lumotnoma — 1 nusxada, ___ varaqda;\n"
+                    "  2. O'zaro hisob-kitob solishtiruvi dalolatnomasi (Akt sverki) nusxasi — 1 nusxada;\n"
+                    "  3. Shartnoma va hisob-fakturalar (yuk xatlari) nusxalari — 1 nusxada.\n"
+                    "• Imzo:\n"
+                    "  Bosh direktor (Rahbar): _______________ (F.I.Sh.)\n"
+                    "  M.O'. (Muhr o'rni)\n\n"
+                    "---\n\n"
+                    "2-QISM: QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA\n"
+                    "• Tashkilot nomi va rekvizitlari;\n"
+                    "• Kimga: [Sudga yoki Qarzdor korxonaga];\n"
+                    "• Katta sarlavha:\n"
+                    "  QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA\n"
+                    "  ([Sana] dagi [№] -sonli Shartnoma va hisob-kitoblarni solishtirish dalolatnomasi bo'yicha)\n"
+                    "• Kirish qismi: Ushbu ma'lumotnoma [Kreditor tashkilot] tomonidan berildiki, [Sana] dagi [№] -sonli Shartnomaga muvofiq [Qarzdor tashkilot, STIR] ning 202_ yil «___» ___________ holatiga to'lanmagan qarzdorligi quyidagicha shakllangan:\n"
+                    "• ANIQ JADVAL (Markdown jadval formatida):\n"
+                    "  | № | Hujjat nomi va raqami (schyot-faktura / yuk xati) | Sana | Yetkazilgan tovar/xizmat qiymati (so'm) | To'langan summa (so'm) | Qolgan asosiy qarz (so'm) | To'lov muddati | Kechiktirilgan kunlar | Hisoblangan penya (so'm) |\n"
+                    "  (Taqdim etilgan hujjatdagi ma'lumotlar asosida to'ldiring, agar ayrim detallar yetishmasa mantiqiy to'g'ri hisob-kitob qiling);\n"
+                    "  | | JAMI: | | ... | ... | ... | | | ... |\n\n"
+                    "• YAKUNIY SUMMALAR (RAQAMDA VA SO'Z BILAN):\n"
+                    "  - Asosiy qarz summasi: ... (...) so'm;\n"
+                    "  - Hisoblangan penya summasi: ... (...) so'm;\n"
+                    "  - JAMI TALAB QILINAYOTGAN QARZDORLIK: ... (...) so'm.\n\n"
+                    "• HUQUQIY VA BUXGALTERIYA ASOSLARI:\n"
+                    "  - O'zbekiston Respublikasi «Buxgalteriya hisobi to'g'risida»gi Qonunining 14 va 19-moddalari;\n"
+                    "  - O'zbekiston Respublikasi Fuqarolik kodeksining 236, 237, 327, 333-moddalari;\n"
+                    "  - Taraflar o'rtasida imzolangan Shartnoma bandlari hamda hisob-kitob solishtiruvi dalolatnomasi.\n\n"
+                    "• TASDIQ SO'ZI:\n"
+                    "  «Ushbu ma'lumotnoma buxgalteriya hisobining birlamchi hujjatlari, bank ko'chirmalari va o'zaro hisob-kitoblarni solishtirish dalolatnomasi asosida tuzildi hamda ko'rsatilgan raqamlarning to'g'riligi va haqqoniyligi tasdiqlanadi.»\n\n"
+                    "• IKKITA MAS'UL SHAXS IMZOSI VA MUHR:\n"
+                    "  Bosh direktor (Rahbar): _______________ (F.I.Sh.)\n"
+                    "  Bosh buxgalter: _______________ (F.I.Sh.)\n"
+                    "  M.O'. (Muhr o'rni)\n\n"
+                    "1. 100% sof va rasmiy o'zbek tilida (lotin alifbosida), professional yuridik va moliyaviy terminlar bilan yozilsin.\n"
+                    "2. Hech qanday kirish so'zlarisiz darhol tayyor rasmiy hujjat matnini chiqaring."
+                )
+        elif lang == "ru":
             prompt = (
                 "Вы — ведущий адвокат высшей квалификации, старший юрисконсульт и признанный эксперт по судебным документам.\n\n"
                 f"ЗАДАЧА: На основе предоставленных пользователем данных составьте официальный, безупречный с юридической точки зрения ДОКУМЕНТ: «{type_name}».\n"

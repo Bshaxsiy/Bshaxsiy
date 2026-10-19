@@ -221,10 +221,15 @@ def get_document_sections_keyboard(doc_id: str, sections: list, lang: str = "uz"
         "📑 Talabnoma (Pretenziya)" if lang == "uz" else
         ("📑 Составить Претензию" if lang == "ru" else "📑 Demand Letter")
     )
+    legal_debt_cert_btn = (
+        "📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else
+        ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter")
+    )
     kb.append([
         InlineKeyboardButton(text=legal_lawsuit_btn, callback_data=f"doc_sec:{doc_id}:legal_lawsuit"),
         InlineKeyboardButton(text=legal_demand_btn, callback_data=f"doc_sec:{doc_id}:legal_demand")
     ])
+    kb.append([InlineKeyboardButton(text=legal_debt_cert_btn, callback_data=f"doc_sec:{doc_id}:legal_debt_cert")])
     kb.append([InlineKeyboardButton(text=custom_label, callback_data=f"doc_sec:{doc_id}:custom")])
     kb.append([InlineKeyboardButton(text=cancel_label, callback_data=f"doc_sec:{doc_id}:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -258,6 +263,12 @@ def get_legal_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="📎 Shartnoma yuklash (Word, PDF)" if lang == "uz" else ("📎 Загрузить договор (Word, PDF)" if lang == "ru" else "📎 Upload Contract (Word, PDF)"),
                 callback_data="legal_type:upload"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter"),
+                callback_data="legal_tpl:debt_cert"
             )
         ],
         [
@@ -309,6 +320,12 @@ def get_legal_doc_action_keyboard(legal_id: str, lang: str = "uz") -> InlineKeyb
     kb = [
         [
             InlineKeyboardButton(
+                text="📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter"),
+                callback_data=f"legal_act:{legal_id}:debt_cert"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text="🏛 Sudga Da'vo arizasi tuzish" if lang == "uz" else ("🏛 Составить Исковое заявление в суд" if lang == "ru" else "🏛 Draft Court Lawsuit"),
                 callback_data=f"legal_act:{legal_id}:lawsuit"
             )
@@ -338,6 +355,12 @@ def get_legal_doc_action_keyboard(legal_id: str, lang: str = "uz") -> InlineKeyb
 def get_legal_templates_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     """Mashhur da'vo va talabnoma turlari ro'yxati"""
     kb = [
+        [
+            InlineKeyboardButton(
+                text="📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter"),
+                callback_data="legal_tpl:debt_cert"
+            )
+        ],
         [
             InlineKeyboardButton(
                 text="💰 Qarz va penya undirish" if lang == "uz" else ("💰 Долг и неустойка" if lang == "ru" else "💰 Debt & Penalties"),
@@ -415,7 +438,42 @@ def get_legal_result_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMa
 
 def get_legal_guidance_text(subtype: str, lang: str = "uz") -> str:
     """Da'vo arizasi va talabnoma turlari bo'yicha yo'riqnoma va so'rov matni"""
-    if subtype in ("lawsuit", "debt"):
+    if subtype in ("debt_cert", "debt_certificate", "malumotnoma"):
+        if lang == "ru":
+            return (
+                "📜 <b>Справка о задолженности + Сопроводительное письмо:</b>\n\n"
+                "Пожалуйста, отправьте мне файл (договор, акт сверки, накладные, счет-фактуры в Word/PDF) или напишите данные текстом:\n"
+                "1. <b>Кредитор:</b> Наименование вашей организации, ИНН, банковские реквизиты, Ф.И.О. руководителя и главного бухгалтера;\n"
+                "2. <b>Должник / Адресат:</b> Наименование суда или организации должника, ИНН, адрес;\n"
+                "3. <b>Основание долга:</b> Номер и дата договора, накладных, акта сверки взаиморасчетов;\n"
+                "4. <b>Сумма долга:</b> Основной долг, период просрочки, расчет пени;\n"
+                "5. <b>Исходящий номер и дата</b> (если необходимо).\n\n"
+                "✍️ <i>Отправьте файл или опишите ситуацию — бот сформирует полный официальный комплект: Сопроводительное письмо + Справку о задолженности с таблицей и подписями!</i>"
+            )
+        elif lang == "en":
+            return (
+                "📜 <b>Certificate of Indebtedness + Formal Transmittal/Cover Letter:</b>\n\n"
+                "Please upload your contract, reconciliation act, or invoices (Word/PDF) or enter details:\n"
+                "1. <b>Creditor:</b> Company name, Tax ID, bank details, Director & Chief Accountant names;\n"
+                "2. <b>Debtor / Recipient:</b> Court or debtor organization details;\n"
+                "3. <b>Basis:</b> Contract/agreement numbers and dates, invoice references;\n"
+                "4. <b>Debt Amount:</b> Principal debt, overdue period, penalty calculation;\n"
+                "5. <b>Outgoing letter reference & date</b>.\n\n"
+                "✍️ <i>Upload file or send details — AI will prepare a complete package: Cover Letter + Accounting Certificate of Debt!</i>"
+            )
+        else:
+            return (
+                "📜 <b>Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati shakllantirish:</b>\n\n"
+                "Iltimos, mavjud shartnoma, solishtirma dalolatnoma (акт сверки), hisob-fakturalarni Word yoki PDF formatda yuboring yoki quyidagilarni yozing:\n"
+                "1. <b>Kreditor (Talab qiluvchi):</b> Tashkilotingiz nomi, STIR (INN), hisob-raqami, bank nomi, Rahbar va Bosh buxgalter F.I.Sh.;\n"
+                "2. <b>Kimga (Qarzdor / Sud):</b> Qarzdor korxona nomi (yoki tegishli sud nomi), manzili, STIR;\n"
+                "3. <b>Asos hujjatlar:</b> Shartnoma raqami va sanasi, o'zaro hisob-kitob solishtiruvi dalolatnomasi, schyot-fakturalar;\n"
+                "4. <b>Qarzdorlik miqdori:</b> Asosiy qarz summasi, to'lov muddati o'tgan kunlar va penya hisob-kitobi;\n"
+                "5. <b>Chiquvchi xat raqami va sana</b> (agar mavjud bo'lsa).\n\n"
+                "✍️ <i>Faylni yuboring yoki ma'lumotlarni yozing — bot 2 ta rasmiy hujjat: Ilova xati + Qarzdorlik ma'lumotnomasini jadvallari va imzolari bilan tayyorlab beradi!</i>"
+            )
+
+    elif subtype in ("lawsuit", "debt"):
         if lang == "ru":
             return (
                 "🏛 <b>Составление Искового заявления в суд (Взыскание долга):</b>\n\n"
@@ -1240,21 +1298,24 @@ async def generate_legal_from_file(message: Message, status_msg: Message, legal_
     user_name = data.get("user_name", "Foydalanuvchi")
 
     target_name = (
-        "Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+        "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+        ("Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
         ("Sudgacha Talabnoma (Pretenziya)" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-         "Da'vo arizasi va Talabnoma to'plami")
+         "Da'vo arizasi va Talabnoma to'plami"))
     )
     if lang == "ru":
         target_name = (
-            "Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            "Справка о задолженности и Сопроводительное письмо" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            ("Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
             ("Досудебная претензия" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-             "Комплект: Иск и Претензия")
+             "Комплект: Иск и Претензия"))
         )
     elif lang == "en":
         target_name = (
-            "Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            "Certificate of Indebtedness and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            ("Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
             ("Demand Letter" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-             "Lawsuit & Demand Package")
+             "Lawsuit & Demand Package"))
         )
 
     proc_txt = (
@@ -1289,11 +1350,23 @@ async def generate_legal_from_file(message: Message, status_msg: Message, legal_
         await message.answer(legal_doc, parse_mode="HTML")
         return
 
-    title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma")
+    title_prefix = (
+        "Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+        ("Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+        ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma"))
+    )
     if lang == "ru":
-        title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Претензия" if doc_subtype != "both" else "Иск и Претензия")
+        title_prefix = (
+            "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            ("Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+            ("Претензия" if doc_subtype != "both" else "Иск и Претензия"))
+        )
     elif lang == "en":
-        title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")
+        title_prefix = (
+            "Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            ("Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+            ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
+        )
 
     clean_fn = format_doc_title(filename, "", lang=lang)
     title = f"{title_prefix}: {clean_fn}"
@@ -1601,10 +1674,14 @@ async def handle_document_upload(message: Message):
             # Agar izoh (caption) orqali yoki aniq shablon orqali ma'lum bo'lsa:
             auto_type = None
             cap_lower = caption.lower()
-            if any(w in cap_lower for w in ["talabnoma", "претензия", "demand"]):
+            if any(w in cap_lower for w in ["malumotnoma", "ma'lumotnoma", "справка", "solishtiruv", "akt sverki", "акт сверки", "ilova xati", "сопроводительн"]):
+                auto_type = "debt_cert"
+            elif any(w in cap_lower for w in ["talabnoma", "претензия", "demand"]):
                 auto_type = "demand"
             elif any(w in cap_lower for w in ["da'vo", "davo", "иск", "lawsuit", "claim"]):
                 auto_type = "lawsuit"
+            elif doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma"):
+                auto_type = "debt_cert"
             elif doc_subtype in ("debt", "contract", "alimony", "divorce", "labor", "damage"):
                 auto_type = doc_subtype
             elif doc_subtype in ("demand", "demand_debt", "demand_quality"):
@@ -1619,28 +1696,31 @@ async def handle_document_upload(message: Message):
                 f"📄 <b>«{filename}» shartnomasi / hujjati qabul qilindi!</b>\n\n"
                 f"📊 <b>Hajmi:</b> taxminan {char_count:,} ta belgi matn\n\n"
                 f"🎯 <b>Ushbu shartnoma/hujjat asosida qanday yuridik hujjat tayyorlaymiz?</b>\n\n"
-                f"1️⃣ 🏛 <b>Sudga Da'vo arizasi</b> — shartnoma bo'yicha qarz, penya va zararlarni sud orqali majburiy undirish;\n"
-                f"2️⃣ 📑 <b>Sudgacha Talabnoma (Pretenziya)</b> — ikkinchi tarafga 10 kun ichida to'lash yoki kamchilikni bartaraf etish talabi;\n"
-                f"3️⃣ ⚡️ <b>Da'vo va Talabnoma (Ikkalasi birga)</b> — ikkala hujjatni to'liq komplekt holda tayyorlash;\n"
-                f"4️⃣ 📊 <b>Shartnoma tahlili</b> — huquqlar, majburiyatlar va risklar tahlili.\n\n"
+                f"1️⃣ 📜 <b>Qarzdorlik ma'lumotnomasi + Ilova xati</b> — shartnoma yoki solishtiruv dalolatnomasi asosida rasmiy ma'lumotnoma (jadvali bilan) va sud/debitorga kuzatuv xati;\n"
+                f"2️⃣ 🏛 <b>Sudga Da'vo arizasi</b> — shartnoma bo'yicha qarz, penya va zararlarni sud orqali majburiy undirish;\n"
+                f"3️⃣ 📑 <b>Sudgacha Talabnoma (Pretenziya)</b> — ikkinchi tarafga 10 kun ichida to'lash yoki kamchilikni bartaraf etish talabi;\n"
+                f"4️⃣ ⚡️ <b>Da'vo va Talabnoma (Ikkalasi birga)</b> — ikkala hujjatni to'liq komplekt holda tayyorlash;\n"
+                f"5️⃣ 📊 <b>Shartnoma tahlili</b> — huquqlar, majburiyatlar va risklar tahlili.\n\n"
                 f"👇 <i>Kerakli amalni tanlang:</i>"
                 if lang == "uz" else
                 (f"📄 <b>Договор / документ «{filename}» успешно принят!</b>\n\n"
                  f"📊 <b>Объем:</b> около {char_count:,} знаков текста\n\n"
                  f"🎯 <b>Какой юридический документ составить на основе этого файла?</b>\n\n"
-                 f"1️⃣ 🏛 <b>Исковое заявление в суд</b> — принудительное взыскание долга, неустойки и убытков;\n"
-                 f"2️⃣ 📑 <b>Досудебная претензия</b> — официальное требование контрагенту о погашении задолженности;\n"
-                 f"3️⃣ ⚡️ <b>Иск и Претензия (Вместе)</b> — сформировать оба документа одновременно;\n"
-                 f"4️⃣ 📊 <b>Анализ договора</b> — анализ рисков, санкций и сроков.\n\n"
+                 f"1️⃣ 📜 <b>Справка о задолженности + Сопроводительное письмо</b> — официальная справка с таблицей расчетов и письмо в суд или должнику;\n"
+                 f"2️⃣ 🏛 <b>Исковое заявление в суд</b> — принудительное взыскание долга, неустойки и убытков;\n"
+                 f"3️⃣ 📑 <b>Досудебная претензия</b> — официальное требование контрагенту о погашении задолженности;\n"
+                 f"4️⃣ ⚡️ <b>Иск и Претензия (Вместе)</b> — сформировать оба документа одновременно;\n"
+                 f"5️⃣ 📊 <b>Анализ договора</b> — анализ рисков, санкций и сроков.\n\n"
                  f"👇 <i>Выберите действие:</i>"
                  if lang == "ru" else
                  f"📄 <b>Document «{filename}» received successfully!</b>\n\n"
                  f"📊 <b>Size:</b> approx. {char_count:,} characters\n\n"
                  f"🎯 <b>Which legal document should we draft based on this file?</b>\n\n"
-                 f"1️⃣ 🏛 <b>Court Lawsuit</b> — formal court claim for debt, interest, and damages;\n"
-                 f"2️⃣ 📑 <b>Pre-trial Demand Letter</b> — formal breach notice with cure period;\n"
-                 f"3️⃣ ⚡️ <b>Both Lawsuit & Demand Letter</b> — draft the complete litigation package;\n"
-                 f"4️⃣ 📊 <b>Contract Risk Analysis</b> — examine rights, liabilities, and risks.\n\n"
+                 f"1️⃣ 📜 <b>Certificate of Indebtedness + Cover Letter</b> — official accounting statement with itemized table and cover letter;\n"
+                 f"2️⃣ 🏛 <b>Court Lawsuit</b> — formal court claim for debt, interest, and damages;\n"
+                 f"3️⃣ 📑 <b>Pre-trial Demand Letter</b> — formal breach notice with cure period;\n"
+                 f"4️⃣ ⚡️ <b>Both Lawsuit & Demand Letter</b> — draft the complete litigation package;\n"
+                 f"5️⃣ 📊 <b>Contract Risk Analysis</b> — examine rights, liabilities, and risks.\n\n"
                  f"👇 <i>Choose an action below:</i>")
             )
             try:
@@ -1864,6 +1944,26 @@ async def handle_document_section_callback(callback: CallbackQuery):
         )
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
         await generate_legal_from_file(callback.message, status_msg, legal_id, "demand", lang=lang)
+        return
+
+    if action == "legal_debt_cert":
+        legal_id = uuid.uuid4().hex[:8]
+        legal_pending_docs[legal_id] = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "filename": filename,
+            "text": text[:35000],
+            "caption": doc_data.get("caption", ""),
+            "created_at": datetime.now()
+        }
+        status_msg = await callback.message.answer(
+            "📜 <i>Ushbu hujjat asosida Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("📜 <i>Формируется Справка о задолженности и Сопроводительное письмо на основе документа...</i>" if lang == "ru" else
+             "📜 <i>Drafting Certificate of Indebtedness and Cover Letter based on the document...</i>"),
+            parse_mode="HTML"
+        )
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+        await generate_legal_from_file(callback.message, status_msg, legal_id, "debt_cert", lang=lang)
         return
 
     # Bo'lim nomini aniqlash
@@ -3081,18 +3181,21 @@ async def handle_photo_message(message: Message):
     if current_mode.startswith("LEGAL_DOC"):
         doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
         target_name = (
-            "Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-            ("Talabnoma (Pretenziya)" if doc_subtype != "both" else "Da'vo va Talabnoma")
+            "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            ("Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+            ("Talabnoma (Pretenziya)" if doc_subtype != "both" else "Da'vo va Talabnoma"))
         )
         if lang == "ru":
             target_name = (
-                "Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-                ("Досудебная претензия" if doc_subtype != "both" else "Иск и Претензия")
+                "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                ("Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+                ("Досудебная претензия" if doc_subtype != "both" else "Иск и Претензия"))
             )
         elif lang == "en":
             target_name = (
-                "Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-                ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")
+                "Debt Certificate and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                ("Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
+                ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
             )
 
         wait_legal = (
@@ -3290,11 +3393,23 @@ async def handle_text_message(message: Message):
                 await message.answer(legal_doc, parse_mode="HTML")
                 return
 
-            title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Talabnoma"
+            title_prefix = (
+                "Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                ("Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+                ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma"))
+            )
             if lang == "ru":
-                title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Претензия"
+                title_prefix = (
+                    "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                    ("Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+                    ("Претензия" if doc_subtype != "both" else "Иск и Претензия"))
+                )
             elif lang == "en":
-                title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Demand Letter"
+                title_prefix = (
+                    "Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                    ("Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
+                    ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
+                )
 
             clean_snippet = format_doc_title("", text[:30], lang=lang)
             title = f"{title_prefix}: {clean_snippet}"

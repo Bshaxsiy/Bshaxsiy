@@ -13,7 +13,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # PDF
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
@@ -174,8 +174,9 @@ def generate_docx(title: str, content: str, user_name: str = "", lang: str = "uz
         if not line:
             continue
 
-        # Divider chiziqlarni o'tkazib yuborish
+        # Divider chiziqlarni sahifa ajratgich (page break) sifatida ishlatish (masalan Ilova xati va Ma'lumotnoma o'rtasida)
         if re.match(r"^[\-_=—]{3,}\s*$", line):
+            doc.add_page_break()
             continue
 
         # <_> va teglarni tozalash
@@ -183,9 +184,14 @@ def generate_docx(title: str, content: str, user_name: str = "", lang: str = "uz
         if not line:
             continue
 
-        # Yuridik hujjatlar maxsus sarlavhalari (Da'vo arizasi, Talabnoma, So'rayman)
+        # Yuridik hujjatlar maxsus sarlavhalari (Da'vo arizasi, Talabnoma, Ma'lumotnoma, Ilova xati, So'rayman)
         clean_upper = re.sub(r"[\*#`_]", "", line).strip().upper()
-        if any(clean_upper.startswith(k) for k in ["DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM"]):
+        if any(clean_upper.startswith(k) for k in [
+            "DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM",
+            "QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA", "QARZDORLIK TO'G'RISIDA MA'LUMOTNOMA", "MA'LUMOTNOMA",
+            "ILOVA XATI", "KUZATUV XATI", "СПРАВКА О ЗАДОЛЖЕННОСТИ", "СОПРОВОДИТЕЛЬНОЕ ПИСЬМО",
+            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER", "STATEMENT OF DEBT", "1-QISM:", "2-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:"
+        ]):
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             _add_formatted_docx_runs(p, line)
@@ -343,8 +349,9 @@ def generate_pdf(title: str, content: str, user_name: str = "", lang: str = "uz"
             story.append(Spacer(1, 4))
             continue
 
-        # Divider chiziqlarni o'tkazib yuborish
+        # Divider chiziqlarni sahifa ajratgich sifatida ishlatish (masalan Ilova xati va Ma'lumotnoma o'rtasida)
         if re.match(r"^[\-_=—]{3,}\s*$", line):
+            story.append(PageBreak())
             continue
 
         # <_> va teglarni tozalash
@@ -357,7 +364,24 @@ def generate_pdf(title: str, content: str, user_name: str = "", lang: str = "uz"
         formatted_line = re.sub(r"(^|\s)_(.*?)_($|\s)", r"\1\2\3", formatted_line)
         formatted_line = formatted_line.replace("_", " ").replace("`", "")
 
-        if line.startswith("#"):
+        clean_upper = re.sub(r"[\*#`_]", "", line).strip().upper()
+        if any(clean_upper.startswith(k) for k in [
+            "DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM",
+            "QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA", "QARZDORLIK TO'G'RISIDA MA'LUMOTNOMA", "MA'LUMOTNOMA",
+            "ILOVA XATI", "KUZATUV XATI", "СПРАВКА О ЗАДОЛЖЕННОСТИ", "СОПРОВОДИТЕЛЬНОЕ ПИСЬМО",
+            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER", "1-QISM:", "2-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:"
+        ]):
+            center_heading_style = ParagraphStyle(
+                f"CenterLegalHead_{uuid.uuid4().hex[:6]}",
+                parent=h2_style,
+                alignment=1,  # Center
+                fontSize=14,
+                leading=18,
+                spaceBefore=14,
+                spaceAfter=8
+            )
+            story.append(Paragraph(f"<b>{line}</b>", center_heading_style))
+        elif line.startswith("#"):
             clean_h = re.sub(r"^#+\s*", "", formatted_line)
             story.append(Paragraph(clean_h, h2_style))
         elif re.match(r"^[\*\-•]\s+", line):
