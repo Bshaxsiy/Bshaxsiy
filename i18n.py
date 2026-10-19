@@ -142,42 +142,45 @@ MESSAGES: Dict[str, Dict[str, str]] = {
             "👋 Assalomu alaykum, <b>{name}</b>!{admin_badge}\n\n"
             "🌟 <b>Ko'p funksiyali Intellektual Bot</b>ga xush kelibsiz!\n\n"
             "<b>Botning asosiy imkoniyatlari:</b>\n"
-            "1. 📑 <b>Hujjatlar tahlili:</b> Rus, ingliz yoki boshqa tildagi PDF, Word, Excel hujjatlarni chuqur o'rganib, tanlangan tilga aniq va grammatik xatolarsiz tarjima qilib berish.\n"
-            "2. 🌐 <b>Tarjimon (Translator):</b> Matn va hujjatlarni xalqaro darajada professional va ravon tarjima qilish.\n"
-            "3. 🔬 <b>Deep Research:</b> Har qanday mavzuda to'liq ilmiy va tahliliy izlanish hisoboti.\n"
-            "4. 🎬 <b>Musiqa va Video:</b> Instagram/video yuklash, dumaloq video (krujok) va MP3 ajratish.\n"
-            "5. 📽 <b>Slaydlar:</b> Mavzudan professional PowerPoint (<code>.pptx</code>) taqdimot yaratish.\n"
-            "6. 📊 <b>PDF, Word, Excel:</b> Hujjatlarni generatsiya qilish va tartibli jadvallar tuzish.\n"
-            "7. 🤖 <b>AI Chat:</b> Erkin muloqot va professional maslahatlar.\n"
-            "8. 🗄 <b>Arxiv:</b> Barcha so'rovlar, tahlillar va hujjatlar tarixi.\n\n"
+            "1. 📑 <b>Hujjatlar tahlili:</b> PDF, Word, Excel hujjatlarni chuqur o'rganib, tanlangan tilga to'liq tarjima qilish.\n"
+            "2. ⚖️ <b>Sudga Da'vo va Talabnoma:</b> Fuqarolik, iqtisodiy, mehnat sudlariga rasmiy da'vo arizalari va sudgacha talabnoma (pretenziya) tuzish hamda Word/PDF qilib yuklab olish.\n"
+            "3. 🌐 <b>Tarjimon (Translator):</b> Matn va hujjatlarni professional va ravon tarjima qilish.\n"
+            "4. 🔬 <b>Deep Research:</b> Har qanday mavzuda to'liq ilmiy va strategik tahlil hisoboti.\n"
+            "5. 🎬 <b>Musiqa va Video:</b> Instagram yuklash, video xabar (krujok) va MP3 ajratish.\n"
+            "6. 📽 <b>Slaydlar:</b> Mavzudan professional PowerPoint (<code>.pptx</code>) taqdimot yaratish.\n"
+            "7. 📊 <b>PDF, Word, Excel:</b> Hujjatlarni generatsiya qilish va tartibli jadvallar tuzish.\n"
+            "8. 🤖 <b>AI Chat:</b> Erkin muloqot va huquqiy/professional maslahatlar.\n"
+            "9. 🗄 <b>Arxiv:</b> Barcha so'rovlar, tahlillar va sud arizalari tarixi.\n\n"
             "👇 <i>Kerakli bo'limni tanlang:</i>"
         ),
         "ru": (
             "👋 Здравствуйте, <b>{name}</b>!{admin_badge}\n\n"
             "🌟 Добро пожаловать в <b>Многофункциональный Интеллектуальный Бот</b>!\n\n"
             "<b>Основные возможности бота:</b>\n"
-            "1. 📑 <b>Анализ документов:</b> Глубокий анализ PDF, Word, Excel файлов на любых языках с безупречным переводом на русский язык.\n"
-            "2. 🌐 <b>Переводчик (Translator):</b> Профессиональный литературный и точный перевод текстов и документов.\n"
-            "3. 🔬 <b>Deep Research:</b> Комплексные научные и стратегические исследования по любой теме.\n"
-            "4. 🎬 <b>Музыка и Видео:</b> Скачивание из Instagram, видеосообщения (кружочки) и MP3.\n"
-            "5. 📽 <b>Слайды, Презентации:</b> Создание готовых презентаций PowerPoint (<code>.pptx</code>).\n"
-            "6. 📊 <b>PDF, Word, Excel:</b> Генерация отчетов и умных таблиц.\n"
-            "7. 🤖 <b>AI Чат:</b> Свободный диалог и экспертные консультации.\n"
-            "8. 🗄 <b>Архив:</b> История всех ваших запросов, скачивание и удаление файлов.\n\n"
+            "1. 📑 <b>Анализ документов:</b> Глубокий анализ PDF, Word, Excel файлов с переводом на русский язык.\n"
+            "2. ⚖️ <b>Иски и Претензии:</b> Составление официальных исковых заявлений в суд и досудебных претензий с законами и расчетом госпошлины в Word/PDF.\n"
+            "3. 🌐 <b>Переводчик (Translator):</b> Литературный и точный перевод текстов и документов.\n"
+            "4. 🔬 <b>Deep Research:</b> Комплексные научные и стратегические исследования.\n"
+            "5. 🎬 <b>Музыка и Видео:</b> Скачивание из Instagram, кружочки и MP3.\n"
+            "6. 📽 <b>Слайды, Презентации:</b> Создание готовых презентаций PowerPoint (<code>.pptx</code>).\n"
+            "7. 📊 <b>PDF, Word, Excel:</b> Генерация отчетов и умных таблиц.\n"
+            "8. 🤖 <b>AI Чат:</b> Свободный диалог и экспертные консультации.\n"
+            "9. 🗄 <b>Архив:</b> История всех ваших запросов, скачивание и удаление файлов.\n\n"
             "👇 <i>Выберите нужный раздел:</i>"
         ),
         "en": (
             "👋 Hello, <b>{name}</b>!{admin_badge}\n\n"
             "🌟 Welcome to the <b>Multi-functional Intelligent Bot</b>!\n\n"
             "<b>Key Features:</b>\n"
-            "1. 📑 <b>Document Analysis:</b> In-depth legal and business analysis of PDF, Word, Excel files with flawless translation.\n"
-            "2. 🌐 <b>Translator:</b> Professional, highly accurate, and context-aware translation.\n"
-            "3. 🔬 <b>Deep Research:</b> Comprehensive analytical and scientific reports on any topic.\n"
-            "4. 🎬 <b>Music & Video:</b> Instagram downloader, round video notes, and MP3 audio extraction.\n"
-            "5. 📽 <b>Slides & Presentations:</b> Generate professional PowerPoint (<code>.pptx</code>) slides.\n"
-            "6. 📊 <b>PDF, Word, Excel:</b> Automatic document generation and structured spreadsheets.\n"
-            "7. 🤖 <b>AI Chat:</b> Free dialogue and advanced AI guidance.\n"
-            "8. 🗄 <b>Archive:</b> Persistent query history, downloadable files, and clean management.\n\n"
+            "1. 📑 <b>Document Analysis:</b> In-depth analysis of PDF, Word, Excel files with precise translation.\n"
+            "2. ⚖️ <b>Lawsuits & Claims:</b> Draft court lawsuits, claims, and pre-trial formal demand letters ready for print in Word/PDF.\n"
+            "3. 🌐 <b>Translator:</b> Professional and accurate multi-language translation.\n"
+            "4. 🔬 <b>Deep Research:</b> Comprehensive analytical reports on any subject.\n"
+            "5. 🎬 <b>Music & Video:</b> Instagram downloader, video notes, and MP3 audio.\n"
+            "6. 📽 <b>Slides & Presentations:</b> Generate professional PowerPoint (<code>.pptx</code>) slides.\n"
+            "7. 📊 <b>PDF, Word, Excel:</b> Automatic document generation and structured spreadsheets.\n"
+            "8. 🤖 <b>AI Chat:</b> Free dialogue and advanced AI legal/business guidance.\n"
+            "9. 🗄 <b>Archive:</b> Query history, persistent legal docs, and clean management.\n\n"
             "👇 <i>Select a section to get started:</i>"
         )
     },
@@ -185,62 +188,99 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "uz": (
             "📖 <b>Bot bo'limlaridan foydalanish qo'llanmasi:</b>\n\n"
             "📑 <b>1. Hujjatlar tahlili:</b>\n"
-            "PDF, Word (.docx), Excel (.xlsx) yoki matnli fayl jo'nating. Agar hujjat rus yoki ingliz tilida bo'lsa, AI uni tahlil qilib, o'zbek tiliga aniq, ravon va grammatik xatolarsiz tarjima qilib beradi.\n\n"
-            "🌐 <b>2. Tarjimon:</b>\n"
-            "Istalgan matn yoki hujjatni o'zbek, rus, ingliz va boshqa tillar o'rtasida mukammal tarjima qiling. Tarjimani Word, PDF yoki ovozli shaklda yuklab olish mumkin.\n\n"
-            "🔬 <b>3. Deep Research (Chuqur Izlanish):</b>\n"
-            "Istalgan mavzuni yuboring. AI keng qamrovli tahlil, faktlar, statistika va strategik yechimlardan iborat to'liq hisobot tuzadi.\n\n"
-            "🎬 <b>4. Musiqa va Video:</b>\n"
-            "• Instagram havolasini yuboring -> videoni yuklab beradi.\n"
-            "• Video yuboring -> dumaloq (Video Note) yoki MP3 audio qilib beradi.\n\n"
-            "📽 <b>5. Slaydlar, Prezentatsiya:</b>\n"
-            "Mavzu yoki matn yuboring -> bot tayyor <code>.pptx</code> PowerPoint taqdimotini yaratib beradi.\n\n"
-            "📊 <b>6. PDF, WORD, EXCEL:</b>\n"
+            "PDF, Word (.docx), Excel (.xlsx) yoki matnli fayl jo'nating. AI uni tahlil qilib, tanlangan tilga aniq va grammatik xatolarsiz tarjima qilib beradi.\n\n"
+            "⚖️ <b>2. Sudga Da'vo arizasi va Talabnoma:</b>\n"
+            "Qarz undirish, shartnoma buzilishi, aliment, zarar qoplash yoki mehnat nizolari bo'yicha rasmiy da'vo arizalari hamda sudgacha talabnomalarni qonun moddalari, davlat boji hisob-kitobi va ilovalari bilan tuzib, tayyor Word (.docx) va PDF formatida yuklab oling.\n\n"
+            "🌐 <b>3. Tarjimon:</b>\n"
+            "Istalgan matn yoki hujjatni o'zbek, rus, ingliz va boshqa tillar o'rtasida mukammal tarjima qiling. Natijani Word, PDF yoki ovozli shaklda yuklab olish mumkin.\n\n"
+            "🔬 <b>4. Deep Research (Chuqur Izlanish):</b>\n"
+            "Istalgan mavzuni yuboring. AI keng qamrovli tahlil, faktlar va yechimlardan iborat to'liq hisobot tuzadi.\n\n"
+            "🎬 <b>5. Musiqa va Video:</b>\n"
+            "• Instagram havolasi -> video yuklash.\n"
+            "• Video yuborish -> dumaloq (Video Note) yoki MP3 audio.\n\n"
+            "📽 <b>6. Slaydlar, Prezentatsiya:</b>\n"
+            "Mavzu yuboring -> bot tayyor <code>.pptx</code> PowerPoint taqdimotini yaratib beradi.\n\n"
+            "📊 <b>7. PDF, WORD, EXCEL:</b>\n"
             "Matn yuborib uni chiroyli formatlangan Word, PDF yoki Excel jadvali sifatida yuklab oling.\n\n"
-            "🗄 <b>7. Arxiv va Tarix:</b>\n"
-            "Barcha so'rovlar doimiy saqlanadi. Ularni istalgan payt ko'rish, yuklab olish yoki o'chirish mumkin.\n\n"
-            "🌐 <b>8. Tilni o'zgartirish:</b>\n"
-            "Menyudagi <b>«🌐 Til / Язык / Lang»</b> tugmasi yoki <code>/lang</code> buyrug'i orqali tilni istalgan payt almashtirishingiz mumkin."
+            "🗄 <b>8. Arxiv va Tarix:</b>\n"
+            "Barcha tuzilgan arizalar, tahlillar va hisobotlar doimiy saqlanadi. Ularni istalgan payt ko'rish, yuklab olish yoki o'chirish mumkin.\n\n"
+            "🌐 <b>9. Tilni o'zgartirish:</b>\n"
+            "Menyudagi <b>«🌐 Til / Язык / Lang»</b> tugmasi yoki <code>/lang</code> buyrug'i orqali tilni almashtiring."
         ),
         "ru": (
             "📖 <b>Руководство по использованию бота:</b>\n\n"
             "📑 <b>1. Анализ документов:</b>\n"
-            "Отправьте файл PDF, Word (.docx), Excel (.xlsx) на любом языке. AI проведет глубокий анализ и переведет все ключевые пункты на русский язык без грамматических ошибок.\n\n"
-            "🌐 <b>2. Переводчик:</b>\n"
-            "Переводите любые тексты и документы между русским, узбекским, английским и другими языками. Результат можно скачать в Word, PDF или прослушать голосом.\n\n"
-            "🔬 <b>3. Deep Research (Глубокие исследования):</b>\n"
-            "Отправьте интересующую тему. AI подготовит исчерпывающий аналитический отчет со статистикой и практическими выводами.\n\n"
-            "🎬 <b>4. Музыка и Видео:</b>\n"
-            "• Ссылка из Instagram -> скачивание видео.\n"
-            "• Отправка видео -> кружочек (Video Note) или MP3 аудио.\n\n"
-            "📽 <b>5. Слайды, Презентации:</b>\n"
-            "Отправьте тему -> бот создаст презентацию PowerPoint (<code>.pptx</code>).\n\n"
-            "📊 <b>6. PDF, WORD, EXCEL:</b>\n"
+            "Отправьте файл PDF, Word (.docx), Excel (.xlsx). AI проведет глубокий анализ и переведет все ключевые пункты на русский язык.\n\n"
+            "⚖️ <b>2. Исковые заявления и Претензии:</b>\n"
+            "Составление официальных исков в суд (гражданский, экономический, трудовой) и досудебных претензий по взысканию долга, ущерба или договорных споров. Готовые документы скачиваются в Word (.docx) и PDF со статьями законов и госпошлиной.\n\n"
+            "🌐 <b>3. Переводчик:</b>\n"
+            "Переводите любые тексты и документы между русским, узбекским, английским языками.\n\n"
+            "🔬 <b>4. Deep Research:</b>\n"
+            "Комплексный аналитический отчет со статистикой и практическими выводами.\n\n"
+            "🎬 <b>5. Музыка и Видео:</b>\n"
+            "Скачивание из Instagram, видеосообщения-кружочки и извлечение MP3.\n\n"
+            "📽 <b>6. Слайды, Презентации:</b>\n"
+            "Создание презентации PowerPoint (<code>.pptx</code>).\n\n"
+            "📊 <b>7. PDF, WORD, EXCEL:</b>\n"
             "Генерация красивых документов Word, PDF или таблиц Excel.\n\n"
-            "🗄 <b>7. Архив:</b>\n"
-            "История всех ваших отчетов и документов с возможностью скачивания и удаления.\n\n"
-            "🌐 <b>8. Смена языка:</b>\n"
-            "Кнопка <b>«🌐 Til / Язык / Lang»</b> или команда <code>/lang</code> позволяет изменить язык в любое время."
+            "🗄 <b>8. Архив:</b>\n"
+            "История всех документов с возможностью скачивания и удаления.\n\n"
+            "🌐 <b>9. Смена языка:</b>\n"
+            "Кнопка <b>«🌐 Til / Язык / Lang»</b> или команда <code>/lang</code>."
         ),
         "en": (
             "📖 <b>Bot User Guide:</b>\n\n"
             "📑 <b>1. Document Analysis:</b>\n"
-            "Send PDF, Word (.docx), Excel (.xlsx) files in any language. AI thoroughly analyzes clauses, dates, amounts, and translates everything into English with high precision.\n\n"
-            "🌐 <b>2. Translator:</b>\n"
-            "Accurate translation between English, Uzbek, Russian, and other languages. Export translations directly to Word, PDF, or voice notes.\n\n"
-            "🔬 <b>3. Deep Research:</b>\n"
-            "Send any subject or question. AI creates a detailed research report with data, statistics, and strategic advice.\n\n"
-            "🎬 <b>4. Music & Video:</b>\n"
-            "• Instagram link -> downloads media.\n"
-            "• Send video -> converts to round video note or extracts MP3 audio.\n\n"
-            "📽 <b>5. Slides & Presentations:</b>\n"
-            "Send a topic -> bot generates ready-to-use PowerPoint (<code>.pptx</code>) slides.\n\n"
-            "📊 <b>6. PDF, WORD, EXCEL:</b>\n"
+            "Deep analysis of PDF, Word, Excel files with high-precision translation.\n\n"
+            "⚖️ <b>2. Lawsuits & Formal Claims:</b>\n"
+            "Draft official court lawsuits (civil, commercial, labor) and pre-trial formal demand letters with statutory citations, fee calculations, and formatted print-ready Word (.docx) and PDF downloads.\n\n"
+            "🌐 <b>3. Translator:</b>\n"
+            "Accurate translation between English, Uzbek, Russian, and other languages.\n\n"
+            "🔬 <b>4. Deep Research:</b>\n"
+            "Comprehensive analytical reports on any subject.\n\n"
+            "🎬 <b>5. Music & Video:</b>\n"
+            "Instagram downloader, round video notes, and MP3 extraction.\n\n"
+            "📽 <b>6. Slides & Presentations:</b>\n"
+            "Generate PowerPoint (<code>.pptx</code>) slides.\n\n"
+            "📊 <b>7. PDF, WORD, EXCEL:</b>\n"
             "Export text and summaries into styled Word, PDF, or Excel sheets.\n\n"
-            "🗄 <b>7. Archive:</b>\n"
-            "Browse your query history anytime, download files, or delete unnecessary records.\n\n"
-            "🌐 <b>8. Change Language:</b>\n"
-            "Use the <b>«🌐 Til / Язык / Lang»</b> button or <code>/lang</code> command to change language anytime."
+            "🗄 <b>8. Archive:</b>\n"
+            "Persistent history of all requests and documents.\n\n"
+            "🌐 <b>9. Change Language:</b>\n"
+            "Use <b>«🌐 Til / Язык / Lang»</b> or <code>/lang</code>."
+        )
+    },
+    "legal_menu": {
+        "uz": (
+            "⚖️ <b>Sudga Da'vo arizasi va Talabnoma tuzish markazi</b>\n\n"
+            "Ushbu bo'lim orqali O'zbekiston Respublikasi Fuqarolik, Iqtisodiy, Mehnat va Oila qonunchiligiga to'liq muvofiq, "
+            "barcha moddalar, davlat boji hisob-kitobi va ilovalari bilan rasmiy hujjatlarni tayyorlashingiz mumkin.\n\n"
+            "<b>Tayyorlanadigan hujjat turlari:</b>\n"
+            "🏛 <b>1. Sudga Da'vo arizasi:</b> Fuqarolik, iqtisodiy, ma'muriy yoki mehnat sudlariga da'vo arizasi.\n"
+            "📑 <b>2. Talabnoma (Pretenziya):</b> Sudgacha qarzni to'lash yoki shartnoma majburiyatlarini bajarish to'g'risida rasmiy talabnoma.\n"
+            "📋 <b>3. Mashhur namunalar:</b> Qarz undirish, shartnoma nizosi, aliment, moddiy/ma'naviy zarar, ishga tiklash.\n"
+            "✍️ <b>4. Erkin vaziyat:</b> Vaziyatingizni matn yoki ovozli xabar qilib yuboring, yurist-AI uni to'liq rasmiylashtirib beradi.\n\n"
+            "👇 <i>Kerakli bo'limni tanlang yoki to'g'ridan-to'g'ri vaziyatingizni yozib yuboring:</i>"
+        ),
+        "ru": (
+            "⚖️ <b>Центр составления Исковых заявлений и Претензий</b>\n\n"
+            "Здесь вы можете составить официальные юридические документы в соответствии с Гражданским, Арбитражным, Трудовым и Семейным кодексами со всеми ссылками на статьи, расчетом госпошлины и приложениями.\n\n"
+            "<b>Виды составляемых документов:</b>\n"
+            "🏛 <b>1. Исковое заявление в суд:</b> В гражданские, экономические/арбитражные, административные и трудовые суды.\n"
+            "📑 <b>2. Досудебная претензия:</b> Официальное требование об уплате долга или исполнении обязательств.\n"
+            "📋 <b>3. Готовые категории:</b> Взыскание долга, нарушение договора, алименты, возмещение ущерба, трудовые споры.\n"
+            "✍️ <b>4. Свободное описание:</b> Опишите ситуацию текстом или голосом — AI подготовит готовый к подаче документ.\n\n"
+            "👇 <i>Выберите нужный пункт или отправьте детали вашего дела:</i>"
+        ),
+        "en": (
+            "⚖️ <b>Legal Lawsuits & Formal Demand Letters Center</b>\n\n"
+            "Draft legally compliant, court-admissible litigation claims and formal pre-trial demand letters with full statutory grounds, fee calculations, and exhibits.\n\n"
+            "<b>Supported Document Types:</b>\n"
+            "🏛 <b>1. Court Lawsuit / Statement of Claim:</b> For civil, commercial/economic, administrative, and labor courts.\n"
+            "📑 <b>2. Formal Demand Letter (Notice of Claim):</b> Pre-trial debt collection and contract compliance demands.\n"
+            "📋 <b>3. Popular Templates:</b> Debt recovery, contract breach, alimony, property damage, labor disputes.\n"
+            "✍️ <b>4. Custom Case:</b> Describe your situation in text or audio note — AI will draft a complete legal document.\n\n"
+            "👇 <i>Select a category below or send your case details:</i>"
         )
     },
     "translator_menu": {
@@ -399,6 +439,11 @@ BUTTON_TEXTS = {
         "ru": "📑 Анализ документов",
         "en": "📑 Document Analysis"
     },
+    "btn_legal": {
+        "uz": "⚖️ Da'vo va Talabnoma",
+        "ru": "⚖️ Иск и Претензия",
+        "en": "⚖️ Lawsuit & Claim"
+    },
     "btn_translator": {
         "uz": "🌐 Tarjimon",
         "ru": "🌐 Переводчик",
@@ -479,37 +524,37 @@ def get_main_keyboard_i18n(lang: str = "uz", is_admin: bool = False) -> ReplyKey
     keyboard = [
         [
             KeyboardButton(text=btn("btn_doc_analysis", lang)),
-            KeyboardButton(text=btn("btn_translator", lang))
+            KeyboardButton(text=btn("btn_legal", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_deep_research", lang)),
-            KeyboardButton(text=btn("btn_media", lang))
+            KeyboardButton(text=btn("btn_translator", lang)),
+            KeyboardButton(text=btn("btn_deep_research", lang))
         ],
         [
             KeyboardButton(text=btn("btn_slides", lang)),
             KeyboardButton(text=btn("btn_docs", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_ai_chat", lang)),
-            KeyboardButton(text=btn("btn_archive", lang))
+            KeyboardButton(text=btn("btn_media", lang)),
+            KeyboardButton(text=btn("btn_ai_chat", lang))
+        ],
+        [
+            KeyboardButton(text=btn("btn_archive", lang)),
+            KeyboardButton(text=btn("btn_lang", lang))
         ]
     ]
 
     if is_admin:
         keyboard.append([
             KeyboardButton(text=btn("btn_guard", lang)),
-            KeyboardButton(text=btn("btn_lang", lang))
+            KeyboardButton(text=btn("btn_help", lang))
         ])
         keyboard.append([
-            KeyboardButton(text=btn("btn_help", lang)),
             KeyboardButton(text=btn("btn_main_menu", lang))
         ])
     else:
         keyboard.append([
-            KeyboardButton(text=btn("btn_lang", lang)),
-            KeyboardButton(text=btn("btn_help", lang))
-        ])
-        keyboard.append([
+            KeyboardButton(text=btn("btn_help", lang)),
             KeyboardButton(text=btn("btn_main_menu", lang))
         ])
 

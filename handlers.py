@@ -236,6 +236,382 @@ def get_document_result_keyboard(res_id: str, doc_id: str = "", current_sec_idx:
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
+def get_legal_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Sudga da'vo va talabnoma bosh menyusi klaviaturasi"""
+    kb = [
+        [
+            InlineKeyboardButton(
+                text="🏛 Sudga Da'vo arizasi" if lang == "uz" else ("🏛 Исковое заявление в суд" if lang == "ru" else "🏛 Court Lawsuit"),
+                callback_data="legal_type:lawsuit"
+            ),
+            InlineKeyboardButton(
+                text="📑 Talabnoma (Pretenziya)" if lang == "uz" else ("📑 Претензия (Досудебная)" if lang == "ru" else "📑 Formal Demand Letter"),
+                callback_data="legal_type:demand"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💰 Qarz undirish" if lang == "uz" else ("💰 Взыскание долга" if lang == "ru" else "💰 Debt Recovery"),
+                callback_data="legal_tpl:debt"
+            ),
+            InlineKeyboardButton(
+                text="🏢 Shartnoma nizosi" if lang == "uz" else ("🏢 Спор по договору" if lang == "ru" else "🏢 Contract Dispute"),
+                callback_data="legal_tpl:contract"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👨‍👩‍👦 Aliment undirish" if lang == "uz" else ("👨‍👩‍👦 Взыскание алиментов" if lang == "ru" else "👨‍👩‍👦 Alimony Claim"),
+                callback_data="legal_tpl:alimony"
+            ),
+            InlineKeyboardButton(
+                text="💼 Mehnat / Oylik" if lang == "uz" else ("💼 Трудовой спор / Зарплата" if lang == "ru" else "💼 Labor / Salary Claim"),
+                callback_data="legal_tpl:labor"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Barcha namunalar" if lang == "uz" else ("📋 Все шаблоны" if lang == "ru" else "📋 All Templates"),
+                callback_data="legal_type:templates"
+            ),
+            InlineKeyboardButton(
+                text="✍️ Erkin bayon qilish" if lang == "uz" else ("✍️ Свой запрос" if lang == "ru" else "✍️ Custom Case"),
+                callback_data="legal_type:free"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_legal_templates_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Mashhur da'vo va talabnoma turlari ro'yxati"""
+    kb = [
+        [
+            InlineKeyboardButton(
+                text="💰 Qarz va penya undirish" if lang == "uz" else ("💰 Долг и неустойка" if lang == "ru" else "💰 Debt & Penalties"),
+                callback_data="legal_tpl:debt"
+            ),
+            InlineKeyboardButton(
+                text="🏢 Shartnoma buzilishi" if lang == "uz" else ("🏢 Нарушение договора" if lang == "ru" else "🏢 Breach of Contract"),
+                callback_data="legal_tpl:contract"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👨‍👩‍👦 Aliment undirish" if lang == "uz" else ("👨‍👩‍👦 Взыскание алиментов" if lang == "ru" else "👨‍👩‍👦 Child Support / Alimony"),
+                callback_data="legal_tpl:alimony"
+            ),
+            InlineKeyboardButton(
+                text="💔 Nikohni bekor qilish" if lang == "uz" else ("💔 Расторжение брака" if lang == "ru" else "💔 Divorce Petition"),
+                callback_data="legal_tpl:divorce"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💼 Ishga tiklash / Oylik" if lang == "uz" else ("💼 Восстановление на работе" if lang == "ru" else "💼 Reinstatement & Salary"),
+                callback_data="legal_tpl:labor"
+            ),
+            InlineKeyboardButton(
+                text="🚗 Moddiy zararni qoplash" if lang == "uz" else ("🚗 Возмещение ущерба" if lang == "ru" else "🚗 Property Damage"),
+                callback_data="legal_tpl:damage"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="✉️ Qarz to'lash Talabnomasi" if lang == "uz" else ("✉️ Претензия об уплате долга" if lang == "ru" else "✉️ Debt Demand Notice"),
+                callback_data="legal_tpl:demand_debt"
+            ),
+            InlineKeyboardButton(
+                text="📦 Sifatsiz tovar Talabnomasi" if lang == "uz" else ("📦 Претензия по качеству" if lang == "ru" else "📦 Defective Goods Notice"),
+                callback_data="legal_tpl:demand_quality"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔙 Orqaga" if lang == "uz" else ("🔙 Назад" if lang == "ru" else "🔙 Back"),
+                callback_data="legal_nav:menu"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_legal_result_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Tayyorlangan da'vo arizasi / talabnoma tagidagi boshqaruv va yuklab olish tugmalari"""
+    voice_label = "🎙 Ovozli eshitish" if lang == "uz" else ("🎙 Озвучить (TTS)" if lang == "ru" else "🎙 Voice (TTS)")
+    edit_label = "✏️ Tahrirlash / Fakt qo'shish" if lang == "uz" else ("✏️ Редактировать / Дополнить" if lang == "ru" else "✏️ Edit / Add Facts")
+    new_label = "⚖️ Yangi ariza tuzish" if lang == "uz" else ("⚖️ Новый иск / Претензия" if lang == "ru" else "⚖️ New Lawsuit / Claim")
+    more_label = "📂 Boshqa formatlar" if lang == "uz" else ("📂 Другие форматы" if lang == "ru" else "📂 More Formats")
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📄 Word (.docx) yuklab olish", callback_data=f"tr:docx:{res_id}"),
+                InlineKeyboardButton(text="📑 PDF (.pdf) yuklab olish", callback_data=f"tr:pdf:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text=voice_label, callback_data=f"tr:voice:{res_id}"),
+                InlineKeyboardButton(text=edit_label, callback_data=f"act:ed:{res_id}")
+            ],
+            [
+                InlineKeyboardButton(text=more_label, callback_data=f"act:tr:{res_id}"),
+                InlineKeyboardButton(text=new_label, callback_data="legal_nav:menu")
+            ]
+        ]
+    )
+
+
+def get_legal_guidance_text(subtype: str, lang: str = "uz") -> str:
+    """Da'vo arizasi va talabnoma turlari bo'yicha yo'riqnoma va so'rov matni"""
+    if subtype in ("lawsuit", "debt"):
+        if lang == "ru":
+            return (
+                "🏛 <b>Составление Искового заявления в суд (Взыскание долга):</b>\n\n"
+                "Пожалуйста, отправьте мне факты вашей ситуации текстом или голосовым сообщением (или прикрепите фото/документ расписки/договора):\n"
+                "1. <b>Истец:</b> Ваше Ф.И.О. или название фирмы, адрес, телефон;\n"
+                "2. <b>Ответчик:</b> Ф.И.О. или название организации должника, адрес, контакты;\n"
+                "3. <b>Сумма долга:</b> Размер основного долга и желаемый размер неустойки/пени;\n"
+                "4. <b>Основание:</b> Расписка, договор займа, платежное поручение, дата и срок возврата;\n"
+                "5. <b>Суд:</b> Город или район суда (если известно).\n\n"
+                "✍️ <i>Опишите детали в одном сообщении — AI составит иск со всеми нормами права и расчетом госпошлины!</i>"
+            )
+        elif lang == "en":
+            return (
+                "🏛 <b>Court Lawsuit / Statement of Claim (Debt Recovery):</b>\n\n"
+                "Please describe your case (or upload a contract/agreement file):\n"
+                "1. <b>Plaintiff:</b> Your name / company, address, phone;\n"
+                "2. <b>Defendant:</b> Debtor's name / company, address;\n"
+                "3. <b>Claim Amount:</b> Principal debt + penalties/interest;\n"
+                "4. <b>Legal Grounds:</b> Promissory note, loan agreement, invoice dates;\n"
+                "5. <b>Court:</b> Jurisdiction / court district (if known).\n\n"
+                "✍️ <i>Send the details now — AI will generate an official court claim ready for filing!</i>"
+            )
+        else:
+            return (
+                "🏛 <b>Sudga Da'vo arizasi tuzish (Qarz va penya undirish):</b>\n\n"
+                "Iltimos, vaziyatingiz bo'yicha ma'lumotlarni yozing (yoki tilxat/shartnoma rasmi yoki faylini yuboring):\n"
+                "1. <b>Da'vogar:</b> Ism-familiyangiz yoki korxona nomi, manzil va telefon raqami;\n"
+                "2. <b>Javobgar:</b> Qarzdorning ismi yoki tashkilot nomi, manzili;\n"
+                "3. <b>Qarz summasi:</b> Asosiy qarz va hisoblangan penya/foiz miqdori;\n"
+                "4. <b>Asos:</b> Qarz tilxati, qarz shartnomasi yoki bank o'tkazmasi sanasi va muddati;\n"
+                "5. <b>Sud:</b> Qaysi tuman/shahar sudi (agar ma'lum bo'lsa).\n\n"
+                "✍️ <i>Barchasini bitta xabarda erkin bayon qiling yoki shartnoma faylini jo'nating!</i>"
+            )
+
+    elif subtype in ("demand", "demand_debt", "demand_quality"):
+        if lang == "ru":
+            return (
+                "📑 <b>Составление Досудебной Претензии (Требования):</b>\n\n"
+                "Пожалуйста, отправьте данные для оформления претензии:\n"
+                "1. <b>Кому (Должник):</b> Ф.И.О. или название фирмы-должника, адрес, контакты;\n"
+                "2. <b>От кого (Кредитор):</b> Ваши реквизиты, расчетный счет/карта для возврата;\n"
+                "3. <b>Суть нарушения:</b> По какому договору/счету не поступила оплата или поставлен некачественный товар;\n"
+                "4. <b>Сумма требования:</b> Сколько подлежит возврату;\n"
+                "5. <b>Срок для ответа:</b> Сколько дней вы даете на добровольное погашение (например: 10 дней).\n\n"
+                "✍️ <i>Отправьте сообщение — будет сформирована официальная претензия!</i>"
+            )
+        elif lang == "en":
+            return (
+                "📑 <b>Formal Demand Letter (Pre-trial Notice of Claim):</b>\n\n"
+                "Please provide the demand letter details:\n"
+                "1. <b>Debtor / Recipient:</b> Name, company, address;\n"
+                "2. <b>Creditor / Sender:</b> Your details and payment account;\n"
+                "3. <b>Breach:</b> Specific agreement, unpaid invoices, or defective products;\n"
+                "4. <b>Amount Demanded:</b> Outstanding balance;\n"
+                "5. <b>Grace Period:</b> Number of days given to cure default (e.g. 10 days).\n\n"
+                "✍️ <i>Send your details now!</i>"
+            )
+        else:
+            return (
+                "📑 <b>Sudgacha Talabnoma (Pretenziya) tuzish:</b>\n\n"
+                "Iltimos, talabnoma uchun quyidagi ma'lumotlarni yozib yuboring:\n"
+                "1. <b>Kimga (Qarzdor):</b> Qarzdor shaxs yoki korxona nomi, manzili;\n"
+                "2. <b>Kimdan (Kreditor):</b> Sizning F.I.Sh. yoki korxona nomi, pul o'tkazish rekvizitlari;\n"
+                "3. <b>Buzilgan majburiyat:</b> Qaysi shartnoma yoki mahsulot bo'yicha to'lov to'lanmadi?\n"
+                "4. <b>Talab summasi:</b> Qancha summa to'lanishi talab qilinadi?\n"
+                "5. <b>Muddat:</b> Ixtiyoriy to'lash uchun necha kun muddat bermoqchisiz (odatda 7-10 kun)?\n\n"
+                "✍️ <i>Ma'lumotlarni yozib yuboring!</i>"
+            )
+
+    elif subtype == "contract":
+        if lang == "ru":
+            return (
+                "🏢 <b>Иск по нарушению договора и взысканию неустойки:</b>\n\n"
+                "1. Стороны договора (Истец и Ответчик);\n"
+                "2. Номер и дата договора, предмет сделки (поставка, подряд, аренда, услуги);\n"
+                "3. Какие пункты договора нарушены (не поставлен товар, не выполнена работа, не оплачены услуги);\n"
+                "4. Сумма долга, расчет пени и ущерба.\n\n"
+                "✍️ <i>Отправьте информацию или файл договора!</i>"
+            )
+        elif lang == "en":
+            return (
+                "🏢 <b>Breach of Contract Lawsuit:</b>\n\n"
+                "1. Parties to the contract;\n"
+                "2. Contract number, date, subject (sales, lease, services, construction);\n"
+                "3. Breached clauses and damages;\n"
+                "4. Demanded sum and contractual penalties.\n\n"
+                "✍️ <i>Send the facts or contract document!</i>"
+            )
+        else:
+            return (
+                "🏢 <b>Shartnoma majburiyatlarini buzganlik bo'yicha Da'vo arizasi:</b>\n\n"
+                "1. Shartnoma taraflari (Da'vogar va Javobgar rekvizitlari);\n"
+                "2. Shartnoma raqami, sanasi va predmeti (oldi-sotdi, ijara, xizmat ko'rsatish, pudrat);\n"
+                "3. Qaysi shartlar buzildi (tovar yetkazilmadi, ish qilinmadi yoki puli to'lanmadi);\n"
+                "4. Qarzdorlik summasi va shartnomada belgilangan penya foizi.\n\n"
+                "✍️ <i>Ma'lumotlarni yozing yoki shartnoma faylini yuboring!</i>"
+            )
+
+    elif subtype == "alimony":
+        if lang == "ru":
+            return (
+                "👨‍👩‍👦 <b>Исковое заявление о взыскании алиментов:</b>\n\n"
+                "1. Истец и Ответчик (Ф.И.О., адреса, телефоны);\n"
+                "2. Дата заключения брака (или свидетельство о расторжении);\n"
+                "3. Ф.И.О. и даты рождения несовершеннолетних детей;\n"
+                "4. С какого момента ответчик уклоняется от содержания детей;\n"
+                "5. Требование: размер алиментов (1/4 на одного ребенка, 1/3 на двоих или в твердой сумме).\n\n"
+                "✍️ <i>Отправьте данные для составления иска!</i>"
+            )
+        elif lang == "en":
+            return (
+                "👨‍👩‍👦 <b>Child Support / Alimony Claim:</b>\n\n"
+                "1. Plaintiff and Defendant details;\n"
+                "2. Marriage / divorce certificate details;\n"
+                "3. Children full names and dates of birth;\n"
+                "4. Requested monthly support share or fixed sum.\n\n"
+                "✍️ <i>Send the details to draft the petition!</i>"
+            )
+        else:
+            return (
+                "👨‍👩‍👦 <b>Aliment undirish to'g'risida Da'vo arizasi:</b>\n\n"
+                "1. Da'vogar va Javobgar (F.I.Sh., yashash manzili, telefonlari);\n"
+                "2. Nikoh tuzilgan sana (yoki nikohni bekor qilish haqidagi guvohnoma);\n"
+                "3. Voyaga yetmagan farzandlarning F.I.Sh. va tug'ilgan sanalari;\n"
+                "4. Javobgar qachondan beri moddiy yordam bermayotgani;\n"
+                "5. Talab: Aliment miqdori (1 bola uchun 1/4 qism, 2 bola uchun 1/3 qism yoki qat'iy summada).\n\n"
+                "✍️ <i>Ma'lumotlarni yozib yuboring!</i>"
+            )
+
+    elif subtype == "divorce":
+        if lang == "ru":
+            return (
+                "💔 <b>Исковое заявление о расторжении брака:</b>\n\n"
+                "1. Истец и Ответчик (Ф.И.О., адреса, телефоны);\n"
+                "2. Дата и орган ЗАГС регистрации брака;\n"
+                "3. Наличие несовершеннолетних детей;\n"
+                "4. Причины расторжения брака (не сошлись характерами, совместное хозяйство не ведется);\n"
+                "5. Наличие имущественных споров.\n\n"
+                "✍️ <i>Отправьте информацию для составления иска!</i>"
+            )
+        elif lang == "en":
+            return (
+                "💔 <b>Divorce Petition:</b>\n\n"
+                "1. Spouses full names, addresses;\n"
+                "2. Date and place of marriage registration;\n"
+                "3. Minor children info;\n"
+                "4. Grounds for marriage dissolution.\n\n"
+                "✍️ <i>Send details to draft the divorce petition!</i>"
+            )
+        else:
+            return (
+                "💔 <b>Nikohni bekor qilish to'g'risida Da'vo arizasi:</b>\n\n"
+                "1. Da'vogar va Javobgar (F.I.Sh., manzillari, telefonlari);\n"
+                "2. Nikoh qachon va qaysi FHDYo bo'limida qayd etilgan;\n"
+                "3. Voyaga yetmagan farzandlar bormi yoki yo'qmi;\n"
+                "4. Oilaning ajralish sababi (birga yashamaslik, xarakterlar to'g'ri kelmasligi);\n"
+                "5. Mol-mulk taqsimoti bo'yicha da'vo bormi?\n\n"
+                "✍️ <i>Ma'lumotlarni yozib yuboring!</i>"
+            )
+
+    elif subtype == "labor":
+        if lang == "ru":
+            return (
+                "💼 <b>Трудовой спор (Восстановление на работе, взыскание зарплаты):</b>\n\n"
+                "1. Работодатель: название предприятия, адрес;\n"
+                "2. Работник: ваше Ф.И.О., должность, стаж работы;\n"
+                "3. Дата и основание незаконного увольнения (номер приказа) или период невыплаты зарплаты;\n"
+                "4. Сумма невыплаченной заработной платы и компенсации.\n\n"
+                "✍️ <i>Отправьте информацию или файл приказа/трудового договора!</i>"
+            )
+        elif lang == "en":
+            return (
+                "💼 <b>Labor Dispute (Wrongful termination / Unpaid wages):</b>\n\n"
+                "1. Employer company name, address;\n"
+                "2. Employee name, position, employment period;\n"
+                "3. Termination date and grounds, or unpaid wage period;\n"
+                "4. Total unpaid wages, compensation demanded.\n\n"
+                "✍️ <i>Send the facts or employment contract!</i>"
+            )
+        else:
+            return (
+                "💼 <b>Mehnat nizosi (Ishga tiklash va oylik maosh undirish):</b>\n\n"
+                "1. Ish beruvchi: Korxona/tashkilot nomi, manzili;\n"
+                "2. Xodim: F.I.Sh., egallagan lavozimi, ishlagan davri;\n"
+                "3. Ishdan bo'shatish sanasi va asosi (buyruq raqami) yoki oylik to'lanmagan oylar;\n"
+                "4. Undirilishi so'ralayotgan oylik maosh summasi va ma'naviy zarar miqdori.\n\n"
+                "✍️ <i>Ma'lumotlarni yozing yoki mehnat shartnomasi/buyruq faylini yuboring!</i>"
+            )
+
+    elif subtype == "damage":
+        if lang == "ru":
+            return (
+                "🚗 <b>Иск о возмещении материального и морального ущерба:</b>\n\n"
+                "1. Истец и Ответчик (виновник ущерба);\n"
+                "2. Обстоятельства происшествия (ДТП, залив квартиры, повреждение имущества);\n"
+                "3. Документы, подтверждающие вину (протокол ГАИ, акт управляющей компании);\n"
+                "4. Размер ущерба (сумма по оценке эксперта или чекам ремонта).\n\n"
+                "✍️ <i>Отправьте детали для составления иска!</i>"
+            )
+        elif lang == "en":
+            return (
+                "🚗 <b>Property Damage / Tort Claim:</b>\n\n"
+                "1. Plaintiff and Defendant info;\n"
+                "2. Incident details (traffic accident, water flooding, property damage);\n"
+                "3. Police or technical incident report;\n"
+                "4. Assessed damages amount and repair estimates.\n\n"
+                "✍️ <i>Send incident details!</i>"
+            )
+        else:
+            return (
+                "🚗 <b>Yetkazilgan moddiy va ma'naviy zararni qoplash da'vosi:</b>\n\n"
+                "1. Da'vogar (jabrlanuvchi) va Javobgar (zarar yetkazuvchi shaxs);\n"
+                "2. Hodisa tafsilotlari (YTH / avariya, xonadonni suv bosishi, mulkka shikast yetkazish);\n"
+                "3. Aybni tasdiqlovchi hujjat (YPX bayonnomasi, MIB qarori, dalolatnoma);\n"
+                "4. Yetkazilgan moddiy zarar summasi (ekspert baholash xulosasi yoki ta'mirlash xarajatlari).\n\n"
+                "✍️ <i>Ma'lumotlarni yozib yuboring!</i>"
+            )
+
+    else:
+        if lang == "ru":
+            return (
+                "⚖️ <b>Составление Искового заявления или Претензии:</b>\n\n"
+                "Пожалуйста, подробно опишите вашу ситуацию текстом или голосовым сообщением (или отправьте файл документа):\n"
+                "• Кто вы и кто ответчик / должник?\n"
+                "• Что произошло, какие права или договоренности нарушены?\n"
+                "• Какую сумму или требования вы хотите заявить?\n\n"
+                "✍️ <i>AI подготовит официальный юридический документ со всеми статьями закона!</i>"
+            )
+        elif lang == "en":
+            return (
+                "⚖️ <b>Legal Lawsuit / Demand Letter Drafting:</b>\n\n"
+                "Please describe your situation in detail:\n"
+                "• Parties involved (Plaintiff and Defendant / Debtor);\n"
+                "• Chronological facts and breached obligations;\n"
+                "• Specific claims and relief sought.\n\n"
+                "✍️ <i>AI will generate a complete legal document compliant with court standards!</i>"
+            )
+        else:
+            return (
+                "⚖️ <b>Sudga Da'vo arizasi yoki Talabnoma tuzish:</b>\n\n"
+                "Iltimos, vaziyatingizni batafsil yozib yuboring (yoki ovozli xabar/hujjat jo'nating):\n"
+                "• Kim da'vogar va kim javobgar / qarzdor?\n"
+                "• Nima voqea sodir bo'lgan, qaysi huquq yoki shartnoma buzilgan?\n"
+                "• Qancha summa yoki qanday talab qo'ymoqchisiz?\n\n"
+                "✍️ <i>Sun'iy intellekt barcha qonuniy moddalar, davlat boji hisobi va ilovalari bilan rasmiy hujjat tuzib beradi!</i>"
+            )
+
+
 def get_transfer_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
     """Natijani tegishli bo'limlarga o'tkazish tanlovlari"""
     voice_label = "🎙 Ovozli qilish (TTS)" if lang == "uz" else ("🎙 Озвучить (TTS)" if lang == "ru" else "🎙 Voice (TTS)")
@@ -336,6 +712,7 @@ def get_archive_list_keyboard(items: list, page: int, total_count: int, per_page
     kb = []
     category_icons = {
         "doc": "📑",
+        "legal": "⚖️",
         "research": "🔬",
         "audio": "🎙",
         "image": "📸",
@@ -618,6 +995,73 @@ async def nav_doc_analysis(message: Message):
     )
 
 
+@router.message(F.text.in_(get_all_button_variants("btn_legal")))
+@router.message(Command("davo"))
+@router.message(Command("legal"))
+@router.message(Command("talabnoma"))
+async def nav_legal_menu(message: Message):
+    """⚖️ Sudga da'vo va talabnoma bo'limi"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "LEGAL_DOC:lawsuit"
+    lang = get_user_lang(user_id)
+    await message.answer(
+        t("legal_menu", lang),
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard(lang=lang)
+    )
+    prompt_txt = (
+        "👇 <b>Quyidagi yo'nalishlardan birini tanlang yoki o'z vaziyatingizni yozib yuboring:</b>" if lang == "uz" else
+        ("👇 <b>Выберите категорию или напишите детали вашего дела:</b>" if lang == "ru" else
+         "👇 <b>Select a category or type your case details:</b>")
+    )
+    await message.answer(
+        prompt_txt,
+        parse_mode="HTML",
+        reply_markup=get_legal_menu_keyboard(lang=lang)
+    )
+
+
+@router.callback_query(F.data.startswith("legal_type:"))
+@router.callback_query(F.data.startswith("legal_tpl:"))
+@router.callback_query(F.data.startswith("legal_nav:"))
+async def handle_legal_callback(callback: CallbackQuery):
+    """Yuridik bo'limning inline tugmalarini qayta ishlash"""
+    data = callback.data
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+    await callback.answer()
+
+    if data == "legal_nav:menu":
+        user_active_mode[user_id] = "LEGAL_DOC:lawsuit"
+        prompt_txt = (
+            "⚖️ <b>Sudga Da'vo arizasi va Talabnoma tuzish markazi:</b>\n\nKerakli yo'nalishni tanlang:" if lang == "uz" else
+            ("⚖️ <b>Центр составления Исковых заявлений и Претензий:</b>\n\nВыберите направление:" if lang == "ru" else
+             "⚖️ <b>Legal Lawsuits & Demand Letters:</b>\n\nSelect an area:")
+        )
+        try:
+            await callback.message.edit_text(prompt_txt, parse_mode="HTML", reply_markup=get_legal_menu_keyboard(lang=lang))
+        except Exception:
+            await callback.message.answer(prompt_txt, parse_mode="HTML", reply_markup=get_legal_menu_keyboard(lang=lang))
+        return
+
+    if data == "legal_type:templates":
+        tpl_txt = (
+            "📋 <b>Mashhur da'vo va talabnoma namunalari:</b>\n\nKerakli yo'nalishni tanlang:" if lang == "uz" else
+            ("📋 <b>Популярные шаблоны исков и претензий:</b>\n\nВыберите нужное направление:" if lang == "ru" else
+             "📋 <b>Popular Legal Templates:</b>\n\nSelect a litigation area:")
+        )
+        try:
+            await callback.message.edit_text(tpl_txt, parse_mode="HTML", reply_markup=get_legal_templates_keyboard(lang=lang))
+        except Exception:
+            await callback.message.answer(tpl_txt, parse_mode="HTML", reply_markup=get_legal_templates_keyboard(lang=lang))
+        return
+
+    subtype = data.split(":", 1)[1]
+    user_active_mode[user_id] = f"LEGAL_DOC:{subtype}"
+    guide_text = get_legal_guidance_text(subtype, lang=lang)
+    await callback.message.answer(guide_text, parse_mode="HTML")
+
+
 @router.message(F.text.in_(get_all_button_variants("btn_translator")))
 @router.message(Command("translate"))
 @router.message(Command("translator"))
@@ -898,7 +1342,46 @@ async def handle_document_upload(message: Message):
             await status_msg.edit_text(err_msg, parse_mode="HTML")
             return
 
-        # 1. TRANSLATOR rejimida hujjat yuborilgan bo'lsa
+        # 1. LEGAL_DOC rejimida hujjat (shartnoma, tilxat, dalolatnoma va h.k.) yuborilgan bo'lsa
+        if current_mode.startswith("LEGAL_DOC"):
+            doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
+            await status_msg.edit_text(
+                f"⚖️ <i>«{filename}» hujjati asosida da'vo / talabnoma tuzilmoqda, iltimos kuting...</i>" if lang == "uz" else
+                (f"⚖️ <i>На основе документа «{filename}» составляется иск / претензия, пожалуйста подождите...</i>" if lang == "ru" else
+                 f"⚖️ <i>Drafting legal document based on «{filename}», please wait...</i>"),
+                parse_mode="HTML"
+            )
+            legal_details = f"Ilova qilingan shartnoma/hujjat: {filename}\nHujjat matni:\n{extracted_text[:35000]}\nFoydalanuvchi izohi: {caption}"
+            legal_doc = await ai_service.generate_legal_document(
+                user_id=user_id,
+                doc_type=doc_subtype,
+                details=legal_details,
+                lang=lang
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+            if legal_doc.startswith("⚠️") or legal_doc.startswith("❌"):
+                await message.answer(legal_doc, parse_mode="HTML")
+                return
+
+            title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Talabnoma"
+            if lang == "ru":
+                title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Претензия"
+            elif lang == "en":
+                title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Demand Letter"
+
+            clean_fn = format_doc_title(filename, "", lang=lang)
+            title = f"{title_prefix}: {clean_fn}"
+            user_name = message.from_user.full_name if message.from_user else "Foydalanuvchi"
+            res_id = store_result(title=title, content=legal_doc, user_name=user_name, user_id=user_id, category="legal")
+            result_markup = get_legal_result_keyboard(res_id=res_id, lang=lang)
+            await send_ai_response(message, legal_doc, res_id=res_id, reply_markup=result_markup, lang=lang)
+            return
+
+        # 1.5. TRANSLATOR rejimida hujjat yuborilgan bo'lsa
         if current_mode == "TRANSLATOR":
             dir_code = user_trans_direction.get(user_id, f"auto:{lang}")
             if ":" in dir_code:
@@ -1908,6 +2391,7 @@ async def handle_archive_callback(callback: CallbackQuery):
             "image": "📸 Rasm tahlili" if lang == "uz" else ("📸 Анализ изображения" if lang == "ru" else "📸 Image Analysis"),
             "slides": "📽 Slaydlar, Prezentatsiya" if lang == "uz" else ("📽 Слайды, Презентация" if lang == "ru" else "📽 Slides, Presentation"),
             "office": "📊 Hujjatlar va jadvallar" if lang == "uz" else ("📊 Документы и таблицы" if lang == "ru" else "📊 Office Documents"),
+            "legal": "⚖️ Sudga da'vo va Talabnoma" if lang == "uz" else ("⚖️ Иски и Претензии" if lang == "ru" else "⚖️ Lawsuits & Claims"),
             "chat": "🤖 AI Chat suhbati" if lang == "uz" else ("🤖 AI Чат" if lang == "ru" else "🤖 AI Chat"),
             "trans": "🌐 Tarjima" if lang == "uz" else ("🌐 Перевод" if lang == "ru" else "🌐 Translation")
         }
@@ -2398,6 +2882,52 @@ async def handle_text_message(message: Message):
     if match:
         await process_instagram_download(message, match.group(0))
         return
+
+    # 1.2. Rejim: LEGAL_DOC (Sudga Da'vo arizasi va Talabnoma)
+    if current_mode.startswith("LEGAL_DOC"):
+        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
+        lang = get_user_lang(user_id)
+
+        status_msg = await message.reply(
+            "⚖️ <i>Qonun moddalari va rasmiy talablar asosida hujjat tuzilmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("⚖️ <i>Формируется официальный юридический документ со ссылками на законы...</i>" if lang == "ru" else
+             "⚖️ <i>Drafting official legal document with statutory grounds...</i>"),
+            parse_mode="HTML"
+        )
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
+
+        try:
+            legal_doc = await ai_service.generate_legal_document(
+                user_id=user_id,
+                doc_type=doc_subtype,
+                details=text,
+                lang=lang
+            )
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
+            if legal_doc.startswith("⚠️") or legal_doc.startswith("❌"):
+                await message.answer(legal_doc, parse_mode="HTML")
+                return
+
+            title_prefix = "Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Talabnoma"
+            if lang == "ru":
+                title_prefix = "Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Претензия"
+            elif lang == "en":
+                title_prefix = "Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else "Demand Letter"
+
+            clean_snippet = format_doc_title("", text[:30], lang=lang)
+            title = f"{title_prefix}: {clean_snippet}"
+            res_id = store_result(title=title, content=legal_doc, user_name=user_name, user_id=user_id, category="legal")
+            result_markup = get_legal_result_keyboard(res_id=res_id, lang=lang)
+            await send_ai_response(message, legal_doc, res_id=res_id, reply_markup=result_markup, lang=lang)
+            return
+        except Exception as e:
+            logger.exception(f"Yuridik hujjat tuzishda xatolik: {e}")
+            await status_msg.edit_text("❌ Hujjat tuzish jarayonida xatolik yuz berdi.", parse_mode="HTML")
+            return
 
     # 1.5. Rejim: TRANSLATOR (Tarjimon)
     if current_mode == "TRANSLATOR":

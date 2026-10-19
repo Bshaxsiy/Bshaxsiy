@@ -686,5 +686,131 @@ class AIService:
             return text
         return res
 
+    async def generate_legal_document(
+        self,
+        user_id: int,
+        doc_type: str,
+        details: str,
+        lang: str = "uz"
+    ) -> str:
+        """
+        Sudga rasmiy Da'vo arizasi (lawsuit) yoki Talabnoma/Pretenziya (demand letter) yaratish.
+        Amaldagi qonunchilik (Fuqarolik, Iqtisodiy, Mehnat, Oila kodekslari va h.k.) moddalariga asoslangan,
+        davlat boji va ilovalar bilan to'liq rasmiy hujjat tayyorlaydi.
+        """
+        type_titles = {
+            "lawsuit": "Sudga Da'vo arizasi",
+            "demand": "Sudgacha Talabnoma (Pretenziya)",
+            "debt": "Qarz va penya undirish to'g'risida Da'vo arizasi",
+            "contract": "Shartnoma majburiyatlarini buzganlik bo'yicha Da'vo arizasi",
+            "alimony": "Aliment undirish to'g'risida Da'vo arizasi",
+            "divorce": "Nikohni bekor qilish to'g'risida Da'vo arizasi",
+            "labor": "Ishga tiklash va oylik maosh undirish to'g'risida Da'vo arizasi",
+            "damage": "Yetkazilgan moddiy va ma'naviy zararni qoplash to'g'risida Da'vo arizasi",
+            "demand_debt": "Qarzdorlikni to'lash to'g'risida Talabnoma (Pretenziya)",
+            "demand_quality": "Sifatsiz mahsulot yoki xizmat bo'yicha Talabnoma (Pretenziya)",
+            "free": "Rasmiy Yuridik Hujjat / Da'vo arizasi"
+        }
+        type_name = type_titles.get(doc_type, "Sudga Da'vo arizasi / Talabnoma")
+
+        if lang == "ru":
+            prompt = (
+                "Вы — ведущий адвокат высшей квалификации, старший юрисконсульт и признанный эксперт по судебным документам.\n\n"
+                f"ЗАДАЧА: На основе предоставленных пользователем данных составьте официальный, безупречный с юридической точки зрения ДОКУМЕНТ: «{type_name}».\n"
+                f"ИСХОДНЫЕ ДАННЫЕ И СИТУАЦИЯ:\n{details}\n\n"
+                "🔴 КАТЕГОРИЧЕСКИЕ ТРЕБОВАНИЯ К ЯЗЫКУ И ОФОРМЛЕНИЮ:\n"
+                "1. ВЕСЬ ТЕКСТ ДОЛЖЕН БЫТЬ НА 100% ЧИСТОМ, ЛИТЕРАТУРНОМ И СТРОГОМ ЮРИДИЧЕСКОМ РУССКОМ ЯЗЫКЕ. Никаких орфографических ошибок и смешивания языков!\n"
+                "2. СТРУКТУРА ДОКУМЕНТА (Официальный судебный / претензионный стандарт):\n"
+                "   • ШАПКА (Справа или единым судебным блоком):\n"
+                "     В [Наименование суда, например: Межрайонный суд по гражданским делам г. Ташкента / Экономический суд]\n"
+                "     Истец / Заявитель: [Ф.И.О. или Наименование организации, адрес, ПИНФЛ/ИНН, телефон]\n"
+                "     Ответчик / Должник: [Ф.И.О. или Наименование организации, адрес, телефон, ИНН]\n"
+                "     Третьи лица: [при наличии]\n"
+                "     Цена иска: [Сумма с расчетом: основной долг + пеня/неустойка]\n"
+                "     Госпошлина: [Размер госпошлины по ставкам закона]\n\n"
+                "   • ЗАГОЛОВОК:\n"
+                "     ИСКОВОЕ ЗАЯВЛЕНИЕ (или ДОСУДЕБНАЯ ПРЕТЕНЗИЯ)\n"
+                "     [о взыскании задолженности, расторжении договора, защите трудовых прав и т.д.]\n\n"
+                "   • ОБСТОЯТЕЛЬСТВА ДЕЛА (Фактическая часть):\n"
+                "     Хронологическое, четкое изложение: когда был заключен договор/расписка, обязательства сторон, конкретные нарушения ответчика, период просрочки, сумма неисполненных обязательств.\n\n"
+                "   • ПРАВОВОЕ ОБОСНОВАНИЕ (Нормы законодательства):\n"
+                "     Точные статьи Гражданского кодекса (ГК), Гражданского процессуального кодекса (ГПК) или Экономического процессуального кодекса (ЭПК) (об исполнении обязательств, ответственности, взыскании неустойки, подсудности).\n\n"
+                "   • СОБЛЮДЕНИЕ ДОСУДЕБНОГО ПОРЯДКА:\n"
+                "     Указание на направление претензии и отсутствие ответа или отказ.\n\n"
+                "   • ПРОШУ СУД (Просительная часть / Требования) — строго по пунктам:\n"
+                "     1. Взыскать с Ответчика в пользу Истца сумму основного долга в размере ...;\n"
+                "     2. Взыскать с Ответчика неустойку/пеню в размере ...;\n"
+                "     3. Взыскать с Ответчика сумму государственной пошлины и почтовые расходы.\n\n"
+                "   • ПРИЛОЖЕНИЯ (Перечень доказательств):\n"
+                "     1. Документ об уплате государственной пошлины;\n"
+                "     2. Копия договора / расписки / актов / накладных;\n"
+                "     3. Копия направленной претензии и почтовой квитанции;\n"
+                "     4. Расчет исковых требований;\n"
+                "     5. Копия паспорта / свидетельства о регистрации Истца;\n"
+                "     6. Доказательства направления копии иска Ответчику.\n\n"
+                "   • ДАТА И ПОДПИСЬ:\n"
+                "     «___» _________ 202__ года        Истец: _______________ / Подпись / Ф.И.О.\n\n"
+                "3. Если пользователь не указал конкретные персональные данные (паспорт, номер договора), укажите понятные маркеры в скобках [Ф.И.О. истца: ...], но ВСЮ правовую аргументацию, расчеты и статьи напишите полно, профессионально и готово к подаче.\n"
+                "4. Выдайте сразу готовый официальный документ без вводных фраз."
+            )
+        elif lang == "en":
+            prompt = (
+                "You are a senior litigation attorney and expert in civil, commercial, and procedural litigation.\n\n"
+                f"TASK: Draft a professional, court-admissible legal document: «{type_name}» based on user facts.\n"
+                f"USER DETAILS & FACTS:\n{details}\n\n"
+                "🔴 REQUIREMENTS:\n"
+                "1. Flawless, professional legal English.\n"
+                "2. Standard litigation layout: Court Caption, Plaintiff and Defendant info, Claim value, State fees, Title, Factual background, Statutory grounds, Pre-trial compliance, Prayer for relief (WHEREFORE / PRAYER FOR RELIEF), List of exhibits, Date and signature block.\n"
+                "3. Provide the complete ready-to-file document immediately without conversational filler."
+            )
+        else:
+            prompt = (
+                "Siz O'zbekiston Respublikasining oliy toifali advokati, amaliyotchi bosh yurist va sud hujjatlari tuzish bo'yicha yetakchi ekspertsiz.\n\n"
+                f"VAZIFA: Foydalanuvchi taqdim etgan ma'lumotlar asosida rasmiy va yuridik jihatdan benuqson, sudga yoki qarzdorga topshirishga to'liq tayyor bo'lgan HUJJAT: «{type_name}» tuzib bering.\n"
+                f"FOYDALANUVCHI VAZIYATI VA TAFSILOTLARI:\n{details}\n\n"
+                "🔴 QAT'IY YURIDIK VA FORMAT TALABLARI:\n"
+                "1. TIL VA IMLO: 100% sof, ravon va adabiy o'zbek tilida (lotin alifbosida), mukammal yuridik atamalar bilan, birorta ham imlo xatolarisiz yozilsin.\n"
+                "2. HUJJAT TUZILISHI (Rasmiy sud va da'vo talablari bo'yicha):\n"
+                "   • SHAPKA (Sud nomi va taraflar rekvizitlari):\n"
+                "     Fuqarolik ishlari bo'yicha [Tuman/Shahar] tumanlararo sudiga\n"
+                "     (yoki [Viloyat/Shahar] tumanlararo iqtisodiy sudiga)\n"
+                "     Da'vogar: [F.I.Sh. yoki Tashkilot nomi, manzili, JShShIR/STIR, telefon raqami]\n"
+                "     Javobgar: [F.I.Sh. yoki Tashkilot nomi, manzili, JShShIR/STIR, telefon raqami]\n"
+                "     Uchinchi shaxslar: [mavjud bo'lsa]\n"
+                "     Da'vo bahosi: [Aniq summa: asosiy qarz + penya/foizlar summasi]\n"
+                "     Davlat boji: [O'zbekiston Respublikasi «Davlat boji to'g'risida»gi Qonuniga muvofiq hisoblangan davlat boji summasi]\n\n"
+                "   • KATTA SARLAVHA:\n"
+                "     DA'VO ARIZASI (yoki TALABNOMA / PRETENZIYA)\n"
+                "     ([Qarzdorlikni va penya summalarini undirish to'g'risida] yoki tegishli mavzu)\n\n"
+                "   • HOLATNING BAYONI (Faktlar va xronologiya):\n"
+                "     Kelishuv, qarz tilxati yoki shartnoma qachon tuzilgan, kim qanday majburiyat olgan, javobgar qaysi majburiyatini buzgan, qancha to'lov qilinmagan, qancha muddat o'tgan.\n\n"
+                "   • HUQUQIY VA QONUNIY ASOSLAR (Kodeks moddalari):\n"
+                "     O'zbekiston Respublikasi Fuqarolik kodeksining (FK) tegishli moddalari (masalan, 236, 237, 324, 325, 327, 333, 382, 732-739-moddalar), Fuqarolik protsessual kodeksining (FPK) 188, 189, 190, 191-moddalari (yoki Iqtisodiy protsessual kodeksining tegishli moddalari).\n\n"
+                "   • SUDGACHA HAL QILISH TARTIBIGA RIOYA QILINGANLIGI:\n"
+                "     Javobgarga talabnoma (pretenziya) yuborilganligi va unga javob berilmagani yoki rad etilgani haqida yozish.\n\n"
+                "   • TALAB VA ILTIMOS (SO'RAYMAN: yoki TALAB QILAMAN: — bandma-band):\n"
+                "     1. Javobgardan da'vogar foydasiga ... so'm asosiy qarz summasi undirilsin;\n"
+                "     2. Javobgardan da'vogar foydasiga ... so'm penya / jarima summasi undirilsin;\n"
+                "     3. Da'vogar tomonidan to'langan ... so'm davlat boji va pochta xarajatlari javobgardan undirilsin.\n\n"
+                "   • ILOVALAR (Ilova qilinadigan hujjatlar ro'yxati):\n"
+                "     1. Davlat boji to'langanligi kvitansiyasi;\n"
+                "     2. Shartnoma / qarz tilxati / hisob-faktura / solishtirma dalolatnoma nusxasi;\n"
+                "     3. Javobgarga talabnoma yuborilganligi va pochta kvitansiyasi nusxasi;\n"
+                "     4. Da'vo summasi hisob-kitob varaqasi;\n"
+                "     5. Da'vogarning pasport / guvohnoma nusxasi;\n"
+                "     6. Da'vo arizasining javobgarga topshirilgani (yuborilgani) tasdig'i.\n\n"
+                "   • SANA VA IMZO:\n"
+                "     202__ yil «___» ____________        Da'vogar: _________________ (F.I.Sh.)\n\n"
+                "3. Agar foydalanuvchi ma'lum shaxsiy rekvizitlarni (masalan pasport raqami, aniq uy manzili) aytmagan bo'lsa, ularni [Da'vogarning manzili: ...] kabi aniq qavslarda qoldiring, lekin yuridik matn, moddalar, qarz hisob-kitobi va talablarni 100% to'liq va professional darajada shakllantiring.\n"
+                "4. To'g'ridan-to'g'ri rasmiy hujjat matnini chiqaring, ortiqcha salom-alik yoki kirish so'zlarini qo'shmang."
+            )
+
+        return await self.generate_content_with_fallback(
+            contents=prompt,
+            timeout=55.0,
+            operation_name=f"Yuridik hujjat generatsiyasi ({doc_type})"
+        )
+
 
 ai_service = AIService()
+

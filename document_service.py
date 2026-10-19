@@ -183,6 +183,36 @@ def generate_docx(title: str, content: str, user_name: str = "", lang: str = "uz
         if not line:
             continue
 
+        # Yuridik hujjatlar maxsus sarlavhalari (Da'vo arizasi, Talabnoma, So'rayman)
+        clean_upper = re.sub(r"[\*#`_]", "", line).strip().upper()
+        if any(clean_upper.startswith(k) for k in ["DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM"]):
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _add_formatted_docx_runs(p, line)
+            if p.runs:
+                p.runs[0].font.size = Pt(16)
+                p.runs[0].font.bold = True
+                p.runs[0].font.color.rgb = RGBColor(31, 78, 121)
+            continue
+        elif any(clean_upper.startswith(k) for k in ["SO'RAYMAN:", "TALAB QILAMAN:", "ПРОШУ СУД:", "ПРОШУ:", "PRAYER FOR RELIEF:"]):
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _add_formatted_docx_runs(p, line)
+            if p.runs:
+                p.runs[0].font.size = Pt(13)
+                p.runs[0].font.bold = True
+                p.runs[0].font.color.rgb = RGBColor(31, 78, 121)
+            continue
+        elif any(clean_upper.startswith(k) for k in ["ILOVALAR:", "ILOVA:", "ПРИЛОЖЕНИЯ:", "ПРИЛОЖЕНИЕ:", "EXHIBITS:"]):
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            _add_formatted_docx_runs(p, line)
+            if p.runs:
+                p.runs[0].font.size = Pt(12)
+                p.runs[0].font.bold = True
+                p.runs[0].font.color.rgb = RGBColor(31, 78, 121)
+            continue
+
         if line.startswith("### "):
             h = doc.add_heading(level=3)
             clean_h = clean_doc_text(line.replace("### ", ""))
