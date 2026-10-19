@@ -225,11 +225,16 @@ def get_document_sections_keyboard(doc_id: str, sections: list, lang: str = "uz"
         "📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else
         ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter")
     )
+    legal_notary_btn = (
+        "📜 Notariusdan Ijro xati (3757)" if lang == "uz" else
+        ("📜 Исполнительная надпись (3757)" if lang == "ru" else "📜 Notary Execution Inscription (3757)")
+    )
     kb.append([
         InlineKeyboardButton(text=legal_lawsuit_btn, callback_data=f"doc_sec:{doc_id}:legal_lawsuit"),
         InlineKeyboardButton(text=legal_demand_btn, callback_data=f"doc_sec:{doc_id}:legal_demand")
     ])
     kb.append([InlineKeyboardButton(text=legal_debt_cert_btn, callback_data=f"doc_sec:{doc_id}:legal_debt_cert")])
+    kb.append([InlineKeyboardButton(text=legal_notary_btn, callback_data=f"doc_sec:{doc_id}:legal_notary_exec")])
     kb.append([InlineKeyboardButton(text=custom_label, callback_data=f"doc_sec:{doc_id}:custom")])
     kb.append([InlineKeyboardButton(text=cancel_label, callback_data=f"doc_sec:{doc_id}:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
@@ -263,6 +268,12 @@ def get_legal_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="📎 Shartnoma yuklash (Word, PDF)" if lang == "uz" else ("📎 Загрузить договор (Word, PDF)" if lang == "ru" else "📎 Upload Contract (Word, PDF)"),
                 callback_data="legal_type:upload"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📜 Notariusdan Ijro xati (3757-son)" if lang == "uz" else ("📜 Исполнительная надпись (3757)" if lang == "ru" else "📜 Notary Inscription (3757)"),
+                callback_data="notary_tpl:both"
             )
         ],
         [
@@ -320,6 +331,12 @@ def get_legal_doc_action_keyboard(legal_id: str, lang: str = "uz") -> InlineKeyb
     kb = [
         [
             InlineKeyboardButton(
+                text="📜 Notariusdan Ijro xati olish (3757-son)" if lang == "uz" else ("📜 Исполнительная надпись нотариуса (3757)" if lang == "ru" else "📜 Notary Execution Inscription (3757)"),
+                callback_data=f"legal_act:{legal_id}:notary_exec"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text="📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter"),
                 callback_data=f"legal_act:{legal_id}:debt_cert"
             )
@@ -355,6 +372,12 @@ def get_legal_doc_action_keyboard(legal_id: str, lang: str = "uz") -> InlineKeyb
 def get_legal_templates_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     """Mashhur da'vo va talabnoma turlari ro'yxati"""
     kb = [
+        [
+            InlineKeyboardButton(
+                text="📜 Notariusdan Ijro xati (3757-son)" if lang == "uz" else ("📜 Исполнительная надпись (3757)" if lang == "ru" else "📜 Notary Inscription (3757)"),
+                callback_data="notary_tpl:both"
+            )
+        ],
         [
             InlineKeyboardButton(
                 text="📜 Qarzdorlik ma'lumotnomasi + Ilova xati" if lang == "uz" else ("📜 Справка о задолженности + Сопроводительное" if lang == "ru" else "📜 Debt Certificate + Cover Letter"),
@@ -409,6 +432,131 @@ def get_legal_templates_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_notary_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Notariusdan ijro xati olish bosh menyusi klaviaturasi (3757-sonli qaror)"""
+    kb = [
+        [
+            InlineKeyboardButton(
+                text="📎 Shartnoma/Hujjat yuklash (Word, PDF)" if lang == "uz" else ("📎 Загрузить договор/акт (Word, PDF)" if lang == "ru" else "📎 Upload Contract/Act (Word, PDF)"),
+                callback_data="notary_act:upload"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📝 Notariusga Ijro xati arizasi" if lang == "uz" else ("📝 Заявление нотариусу" if lang == "ru" else "📝 Application to Notary"),
+                callback_data="notary_tpl:application"
+            ),
+            InlineKeyboardButton(
+                text="✉️ Qarzdorga ogohlantirish xati" if lang == "uz" else ("✉️ Предупреждение должнику" if lang == "ru" else "✉️ Warning to Debtor"),
+                callback_data="notary_tpl:notice"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="⚡️ To'liq to'plam (Ariza + Ogohlantirish)" if lang == "uz" else ("⚡️ Полный комплект (Заявление + Предупреждение)" if lang == "ru" else "⚡️ Full Package (Application + Notice)"),
+                callback_data="notary_tpl:both"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 3757-sonli talablar ro'yxati (Kategoriyalar)" if lang == "uz" else ("📋 Категории требований по приказу № 3757" if lang == "ru" else "📋 Decree 3757 Categories"),
+                callback_data="notary_tpl:categories"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="✍️ Erkin bayon qilish" if lang == "uz" else ("✍️ Свой запрос" if lang == "ru" else "✍️ Custom Details"),
+                callback_data="notary_tpl:free"
+            ),
+            InlineKeyboardButton(
+                text="🏠 Bosh menyu" if lang == "uz" else ("🏠 Главное меню" if lang == "ru" else "🏠 Main Menu"),
+                callback_data="notary_nav:main"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_notary_categories_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """3757-sonli qaror bo'yicha asosiy talablar yo'nalishi"""
+    kb = [
+        [
+            InlineKeyboardButton(
+                text="💰 Qarz shartnomasi / Tilxat" if lang == "uz" else ("💰 Договор займа / Расписка" if lang == "ru" else "💰 Loan Agreement / Note"),
+                callback_data="notary_sub:debt"
+            ),
+            InlineKeyboardButton(
+                text="🏢 Yetkazib berish / Xizmatlar" if lang == "uz" else ("🏢 Поставка / Услуги" if lang == "ru" else "🏢 Supply / Services"),
+                callback_data="notary_sub:supply"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🏠 Bino va joylar ijarasi" if lang == "uz" else ("🏠 Аренда помещений" if lang == "ru" else "🏠 Property Lease"),
+                callback_data="notary_sub:rent"
+            ),
+            InlineKeyboardButton(
+                text="⚡️ Kommunal va servis to'lovlari" if lang == "uz" else ("⚡️ Коммунальные платежи / УК" if lang == "ru" else "⚡️ Utility & Service Fees"),
+                callback_data="notary_sub:utilities"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🚗 Lizing va transport" if lang == "uz" else ("🚗 Лизинг и транспорт" if lang == "ru" else "🚗 Leasing & Transport"),
+                callback_data="notary_sub:leasing"
+            ),
+            InlineKeyboardButton(
+                text="🏦 Bank krediti / Mikroqarz" if lang == "uz" else ("🏦 Кредит / Микрозайм" if lang == "ru" else "🏦 Bank Credit / Loan"),
+                callback_data="notary_sub:credit"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔙 Orqaga" if lang == "uz" else ("🔙 Назад" if lang == "ru" else "🔙 Back"),
+                callback_data="notary_nav:menu"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+def get_notary_guidance_text(subtype: str, lang: str = "uz") -> str:
+    """Notarius ijro xati bo'yicha yo'riqnoma va ma'lumot so'rash matni"""
+    if lang == "ru":
+        return (
+            "📜 <b>Получение исполнительной надписи нотариуса (Приказ Минюста № 3757):</b>\n\n"
+            "Пожалуйста, прикрепите файл договора/акта сверки (Word или PDF) либо напишите следующие данные в сообщении:\n"
+            "1. <b>Взыскатель:</b> Ваше Ф.И.О. или название фирмы, ИНН/ПИНФЛ, банковские реквизиты, телефон;\n"
+            "2. <b>Должник:</b> Ф.И.О. или название организации должника, ИНН/ПИНФЛ, адрес, контакты;\n"
+            "3. <b>Основание требования:</b> Номер и дата договора/расписки, наличие акта сверки взаиморасчетов, счетов-фактур;\n"
+            "4. <b>Сумма долга:</b> Размер основного долга и период просрочки;\n"
+            "5. <b>Нотариальный округ:</b> Город или район, где находится нотариус или должник.\n\n"
+            "✍️ <i>Отправьте файл или текст — бот сформирует полный официальный комплект: Заявление нотариусу + Предупреждение должнику + Проект исполнительной надписи!</i>"
+        )
+    elif lang == "en":
+        return (
+            "📜 <b>Notarial Execution Inscription (Ministry of Justice Decree No. 3757):</b>\n\n"
+            "Please upload your contract/reconciliation act (Word or PDF) or enter details in text:\n"
+            "1. <b>Creditor:</b> Name / Company, Tax ID, address, bank details, phone;\n"
+            "2. <b>Debtor:</b> Name / Company, Tax ID, address;\n"
+            "3. <b>Grounds:</b> Agreement date & number, invoices, reconciliation act;\n"
+            "4. <b>Debt Amount:</b> Principal debt amount and overdue period;\n"
+            "5. <b>Notary Jurisdiction:</b> City or district.\n\n"
+            "✍️ <i>Send details now — AI will draft the complete enforcement package ready for the Notary Public and MIB!</i>"
+        )
+    else:
+        return (
+            "📜 <b>Notariusdan Ijro xati olish (Adliya vazirligining 3757-sonli qarori asosida):</b>\n\n"
+            "Iltimos, mavjud shartnoma, solishtirma dalolatnoma (акт сверки), tilxat yoki hisob-fakturalarni Word/PDF shaklda yuboring yoki quyidagilarni yozing:\n"
+            "1. <b>Undiruvchi (Kreditor):</b> Korxona nomi yoki F.I.Sh., STIR/JShShIR, bank hisob-raqami, manzil va telefon;\n"
+            "2. <b>Qarzdor:</b> Korxona nomi yoki F.I.Sh., STIR/JShShIR, yuridik yoki yashash manzili;\n"
+            "3. <b>Talab asosi:</b> Shartnoma sanasi va raqami, o'zaro hisob-kitob solishtiruvi dalolatnomasi, qarz tan olinganligi;\n"
+            "4. <b>Qarzdorlik summasi:</b> Asosiy qarz va shartnomaviy foiz/penya miqdori;\n"
+            "5. <b>Notarial okrug:</b> Qaysi tuman/shahar notariusi (agar ma'lum bo'lsa).\n\n"
+            "✍️ <i>Faylni yuboring yoki ma'lumotlarni yozing — bot darhol Notariusga ariza, Qarzdorga 10 kunlik rasmiy ogohlantirish xati va Ijro xati loyihasini to'liq tayyorlab beradi!</i>"
+        )
 
 
 def get_legal_result_keyboard(res_id: str, lang: str = "uz") -> InlineKeyboardMarkup:
@@ -1221,6 +1369,140 @@ async def handle_legal_callback(callback: CallbackQuery):
     await callback.message.answer(guide_text, parse_mode="HTML")
 
 
+@router.message(F.text.in_(get_all_button_variants("btn_notary")))
+@router.message(Command("notarius"))
+@router.message(Command("notary"))
+@router.message(Command("ijroxati"))
+@router.message(Command("ijro_xati"))
+async def nav_notary_menu(message: Message):
+    """📜 Notariusdan ijro xati olish bo'limi (3757-sonli qaror)"""
+    user_id = message.from_user.id
+    user_active_mode[user_id] = "NOTARY:both"
+    lang = get_user_lang(user_id)
+    await message.answer(
+        t("notary_menu", lang),
+        parse_mode="HTML",
+        reply_markup=get_section_keyboard(lang=lang)
+    )
+    prompt_txt = (
+        "📜 <b>Notariusdan Ijro xati olish bo'limi:</b>\n\n"
+        "🏛 O'zbekiston Respublikasining <i>«Notariat to'g'risida»gi Qonuni</i> (76-80-moddalar) hamda Adliya vazirligi tomonidan tasdiqlangan <b>3757-sonli qarorga</b> muvofiq, notariuslar nizosiz pul undirish to'g'risida <b>Ijro xati</b> yozish huquqiga ega!\n\n"
+        "⚡️ Notarius ijro xati sud muhokamasisiz to'g'ridan-to'g'ri <b>MIB (Majburiy ijro byurosi)</b> tomonidan ijro etiladigan qonuniy ijro hujjati hisoblanadi.\n\n"
+        "📎 Mavjud shartnoma, akt, tilxat yoki hisob-faktura faylini (Word .docx yoki PDF .pdf) to'g'ridan-to'g'ri yuboring yoki quyidagi tugmalardan birini tanlang:"
+        if lang == "uz" else
+        ("📜 <b>Центр получения исполнительной надписи нотариуса:</b>\n\n"
+         "🏛 В соответствии с Законом РУз <i>«О нотариате»</i> (статьи 76-80) и <b>Приказом Минюста № 3757</b>, нотариусы уполномочены совершать <b>исполнительные надписи</b> о взыскании бесспорной задолженности!\n\n"
+         "⚡️ Исполнительная надпись является исполнительным документом прямого действия и исполняется органами <b>БПИ (МИБ)</b> без судебного разбирательства.\n\n"
+         "📎 Отправьте файл договора, акта сверки или расписки (Word .docx или PDF .pdf) либо выберите действие:"
+         if lang == "ru" else
+         "📜 <b>Notarial Execution Inscription Center:</b>\n\n"
+         "🏛 In accordance with the Law of Uzbekistan <i>«On Notaries»</i> (Articles 76-80) and <b>Ministry of Justice Decree No. 3757</b>, notaries issue <b>execution inscriptions</b> for undisputed debt recovery!\n\n"
+         "⚡️ This notarial inscription is an immediate enforcement writ enforceable by the <b>Compulsory Enforcement Bureau (MIB)</b> without litigation.\n\n"
+         "📎 Upload your contract or reconciliation file (Word or PDF), or select an option below:")
+    )
+    await message.answer(
+        prompt_txt,
+        parse_mode="HTML",
+        reply_markup=get_notary_menu_keyboard(lang=lang)
+    )
+
+
+@router.callback_query(F.data.startswith("notary_act:"))
+@router.callback_query(F.data.startswith("notary_tpl:"))
+@router.callback_query(F.data.startswith("notary_sub:"))
+@router.callback_query(F.data.startswith("notary_nav:"))
+async def handle_notary_callback(callback: CallbackQuery):
+    """Notarius ijro xati bo'limining inline tugmalarini qayta ishlash"""
+    data = callback.data
+    user_id = callback.from_user.id
+    lang = get_user_lang(user_id)
+    await callback.answer()
+
+    if data == "notary_nav:main":
+        user_active_mode[user_id] = "NOTARY:both"
+        await callback.message.answer(
+            t("welcome", lang, name=callback.from_user.full_name),
+            reply_markup=get_main_keyboard(user_id)
+        )
+        return
+
+    if data == "notary_nav:menu":
+        user_active_mode[user_id] = "NOTARY:both"
+        prompt_txt = (
+            "📜 <b>Notariusdan Ijro xati olish markazi (3757-sonli qaror):</b>\n\n"
+            "Mavjud shartnoma yoki dalolatnoma faylini (Word, PDF) yuboring yoki kerakli bo'limni tanlang:"
+            if lang == "uz" else
+            ("📜 <b>Центр совершения исполнительной надписи нотариуса (Приказ № 3757):</b>\n\n"
+             "Отправьте файл договора/акта (Word, PDF) или выберите пункт меню:"
+             if lang == "ru" else
+             "📜 <b>Notary Execution Inscription (Decree No. 3757):</b>\n\n"
+             "Upload your contract/act file (Word, PDF) or select an option:")
+        )
+        try:
+            await callback.message.edit_text(prompt_txt, parse_mode="HTML", reply_markup=get_notary_menu_keyboard(lang=lang))
+        except Exception:
+            await callback.message.answer(prompt_txt, parse_mode="HTML", reply_markup=get_notary_menu_keyboard(lang=lang))
+        return
+
+    if data == "notary_act:upload":
+        user_active_mode[user_id] = "NOTARY:both"
+        upload_txt = (
+            "📎 <b>Shartnoma, tilxat yoki hisob-kitob dalolatnomasini yuboring (Word .docx, PDF .pdf):</b>\n\n"
+            "Notariusdan ijro xati chiqarish uchun asos bo'ladigan shartnoma, tilxat, tovar-transport yukxati yoki o'zaro hisob-kitob solishtiruvi dalolatnomasini (акт сверки) yuboring.\n\n"
+            "💡 <b>Bot nima qilib beradi?</b>\n"
+            "1. Shartnoma va to'lov majburiyatini to'liq tekshiradi;\n"
+            "2. Qarzdorlikning nizosizligini va 3757-sonli qaror ro'yxatiga muvofiqligini tasdiqlaydi;\n"
+            "3. <b>Notariusga ijro xati yozish to'g'risida rasmiy Ariza</b> tuzadi;\n"
+            "4. Qarzdorga yuborilishi shart bo'lgan <b>10 kunlik qat'iy Ogohlantirish xati</b>ni shakllantiradi;\n"
+            "5. Notarius uchun tayyor <b>Ijro xati loyihasi</b>ni yaratib beradi!\n\n"
+            "👇 <i>Hozir faylni (Word yoki PDF) shu yerga jo'nating:</i>"
+            if lang == "uz" else
+            ("📎 <b>Отправьте файл договора, расписки или акта сверки (Word .docx, PDF .pdf):</b>\n\n"
+             "Отправьте документ, подтверждающий бесспорную задолженность согласно Приказу Минюста № 3757.\n\n"
+             "💡 <b>Что сделает бот:</b>\n"
+             "1. Проверит бесспорность задолженности и реквизиты сторон;\n"
+             "2. Подготовит <b>Заявление нотариусу о совершении исполнительной надписи</b>;\n"
+             "3. Оформит обязательное <b>Предупреждение должнику (срок 10 дней)</b>;\n"
+             "4. Составит готовый <b>Проект исполнительной надписи</b> для нотариуса и БПИ (МИБ)!\n\n"
+             "👇 <i>Отправьте файл прямо сейчас:</i>"
+             if lang == "ru" else
+             "📎 <b>Upload your contract, promissory note, or reconciliation act (Word, PDF):</b>\n\n"
+             "Send the undisputed debt document pursuant to Decree No. 3757.\n\n"
+             "💡 <b>AI will generate:</b>\n"
+             "1. Formal <b>Application to Notary Public</b>;\n"
+             "2. Mandatory <b>10-day Pre-enforcement Warning Notice to Debtor</b>;\n"
+             "3. Official <b>Draft Execution Inscription</b> ready for enforcement by MIB!\n\n"
+             "👇 <i>Send your file now:</i>")
+        )
+        try:
+            await callback.message.edit_text(upload_txt, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(upload_txt, parse_mode="HTML")
+        return
+
+    if data == "notary_tpl:categories":
+        cat_txt = (
+            "📋 <b>Adliya vazirligi 3757-sonli qarori bo'yicha nizosiz talablar toifalari:</b>\n\n"
+            "Quyidagi sohalardan birini tanlang va ma'lumotlarni yuboring:"
+            if lang == "uz" else
+            ("📋 <b>Категории бесспорных требований по Приказу Минюста № 3757:</b>\n\n"
+             "Выберите категорию задолженности:"
+             if lang == "ru" else
+             "📋 <b>Categories of undisputed claims under Decree No. 3757:</b>\n\n"
+             "Select a debt category:")
+        )
+        try:
+            await callback.message.edit_text(cat_txt, parse_mode="HTML", reply_markup=get_notary_categories_keyboard(lang=lang))
+        except Exception:
+            await callback.message.answer(cat_txt, parse_mode="HTML", reply_markup=get_notary_categories_keyboard(lang=lang))
+        return
+
+    subtype = data.split(":", 1)[1]
+    user_active_mode[user_id] = f"NOTARY:{subtype}"
+    guide_text = get_notary_guidance_text(subtype, lang=lang)
+    await callback.message.answer(guide_text, parse_mode="HTML")
+
+
 @router.callback_query(F.data.startswith("legal_act:"))
 async def handle_legal_action_callback(callback: CallbackQuery):
     """Yuklangan shartnoma bo'yicha harakat (da'vo, talabnoma, ikkalasi yoki tahlil) callbacki"""
@@ -1298,24 +1580,27 @@ async def generate_legal_from_file(message: Message, status_msg: Message, legal_
     user_name = data.get("user_name", "Foydalanuvchi")
 
     target_name = (
-        "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+        "Notariusdan Ijro xati to'plami (3757-son)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+        ("Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
         ("Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
         ("Sudgacha Talabnoma (Pretenziya)" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-         "Da'vo arizasi va Talabnoma to'plami"))
+         "Da'vo arizasi va Talabnoma to'plami")))
     )
     if lang == "ru":
         target_name = (
-            "Справка о задолженности и Сопроводительное письмо" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            "Комплект для исполнительной надписи нотариуса (Приказ № 3757)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+            ("Справка о задолженности и Сопроводительное письмо" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
             ("Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
             ("Досудебная претензия" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-             "Комплект: Иск и Претензия"))
+             "Комплект: Иск и Претензия")))
         )
     elif lang == "en":
         target_name = (
-            "Certificate of Indebtedness and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            "Notarial Execution Inscription Package (Decree 3757)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+            ("Certificate of Indebtedness and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
             ("Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
             ("Demand Letter" if doc_subtype in ("demand", "demand_debt", "demand_quality") else
-             "Lawsuit & Demand Package"))
+             "Lawsuit & Demand Package")))
         )
 
     proc_txt = (
@@ -1351,21 +1636,24 @@ async def generate_legal_from_file(message: Message, status_msg: Message, legal_
         return
 
     title_prefix = (
-        "Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+        "Notarius Ijro xati" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+        ("Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
         ("Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-        ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma"))
+        ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma")))
     )
     if lang == "ru":
         title_prefix = (
-            "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            "Исполнительная надпись нотариуса" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+            ("Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
             ("Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-            ("Претензия" if doc_subtype != "both" else "Иск и Претензия"))
+            ("Претензия" if doc_subtype != "both" else "Иск и Претензия")))
         )
     elif lang == "en":
         title_prefix = (
-            "Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            "Notary Execution Inscription" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+            ("Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
             ("Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-            ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
+            ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")))
         )
 
     clean_fn = format_doc_title(filename, "", lang=lang)
@@ -1655,8 +1943,8 @@ async def handle_document_upload(message: Message):
             await status_msg.edit_text(err_msg, parse_mode="HTML")
             return
 
-        # 1. LEGAL_DOC rejimida hujjat (shartnoma, tilxat, dalolatnoma va h.k.) yuborilgan bo'lsa
-        if current_mode.startswith("LEGAL_DOC"):
+        # 1. LEGAL_DOC yoki NOTARY rejimida hujjat (shartnoma, tilxat, dalolatnoma va h.k.) yuborilgan bo'lsa
+        if current_mode.startswith("LEGAL_DOC") or current_mode.startswith("NOTARY"):
             doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "upload"
             legal_id = uuid.uuid4().hex[:8]
             legal_pending_docs[legal_id] = {
@@ -1674,12 +1962,16 @@ async def handle_document_upload(message: Message):
             # Agar izoh (caption) orqali yoki aniq shablon orqali ma'lum bo'lsa:
             auto_type = None
             cap_lower = caption.lower()
-            if any(w in cap_lower for w in ["malumotnoma", "ma'lumotnoma", "справка", "solishtiruv", "akt sverki", "акт сверки", "ilova xati", "сопроводительн"]):
+            if any(w in cap_lower for w in ["ijro xati", "ijro_xati", "notarius", "notary", "нотариус", "исполнительн", "3757"]):
+                auto_type = "notary_exec"
+            elif any(w in cap_lower for w in ["malumotnoma", "ma'lumotnoma", "справка", "solishtiruv", "akt sverki", "акт сверки", "ilova xati", "сопроводительн"]):
                 auto_type = "debt_cert"
             elif any(w in cap_lower for w in ["talabnoma", "претензия", "demand"]):
                 auto_type = "demand"
             elif any(w in cap_lower for w in ["da'vo", "davo", "иск", "lawsuit", "claim"]):
                 auto_type = "lawsuit"
+            elif current_mode.startswith("NOTARY"):
+                auto_type = "notary_exec"
             elif doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma"):
                 auto_type = "debt_cert"
             elif doc_subtype in ("debt", "contract", "alimony", "divorce", "labor", "damage"):
@@ -1696,31 +1988,34 @@ async def handle_document_upload(message: Message):
                 f"📄 <b>«{filename}» shartnomasi / hujjati qabul qilindi!</b>\n\n"
                 f"📊 <b>Hajmi:</b> taxminan {char_count:,} ta belgi matn\n\n"
                 f"🎯 <b>Ushbu shartnoma/hujjat asosida qanday yuridik hujjat tayyorlaymiz?</b>\n\n"
-                f"1️⃣ 📜 <b>Qarzdorlik ma'lumotnomasi + Ilova xati</b> — shartnoma yoki solishtiruv dalolatnomasi asosida rasmiy ma'lumotnoma (jadvali bilan) va sud/debitorga kuzatuv xati;\n"
-                f"2️⃣ 🏛 <b>Sudga Da'vo arizasi</b> — shartnoma bo'yicha qarz, penya va zararlarni sud orqali majburiy undirish;\n"
-                f"3️⃣ 📑 <b>Sudgacha Talabnoma (Pretenziya)</b> — ikkinchi tarafga 10 kun ichida to'lash yoki kamchilikni bartaraf etish talabi;\n"
-                f"4️⃣ ⚡️ <b>Da'vo va Talabnoma (Ikkalasi birga)</b> — ikkala hujjatni to'liq komplekt holda tayyorlash;\n"
-                f"5️⃣ 📊 <b>Shartnoma tahlili</b> — huquqlar, majburiyatlar va risklar tahlili.\n\n"
+                f"1️⃣ 📜 <b>Notariusdan Ijro xati to'plami (3757-son)</b> — sud muhokamasisiz to'g'ridan-to'g'ri MIBga topshirish uchun Notariusga ariza, Qarzdorga ogohlantirish va Ijro xati loyihasi;\n"
+                f"2️⃣ 📜 <b>Qarzdorlik ma'lumotnomasi + Ilova xati</b> — shartnoma yoki solishtiruv dalolatnomasi asosida rasmiy ma'lumotnoma (jadvali bilan) va sud/debitorga kuzatuv xati;\n"
+                f"3️⃣ 🏛 <b>Sudga Da'vo arizasi</b> — shartnoma bo'yicha qarz, penya va zararlarni sud orqali majburiy undirish;\n"
+                f"4️⃣ 📑 <b>Sudgacha Talabnoma (Pretenziya)</b> — ikkinchi tarafga 10 kun ichida to'lash yoki kamchilikni bartaraf etish talabi;\n"
+                f"5️⃣ ⚡️ <b>Da'vo va Talabnoma (Ikkalasi birga)</b> — ikkala hujjatni to'liq komplekt holda tayyorlash;\n"
+                f"6️⃣ 📊 <b>Shartnoma tahlili</b> — huquqlar, majburiyatlar va risklar tahlili.\n\n"
                 f"👇 <i>Kerakli amalni tanlang:</i>"
                 if lang == "uz" else
                 (f"📄 <b>Договор / документ «{filename}» успешно принят!</b>\n\n"
                  f"📊 <b>Объем:</b> около {char_count:,} знаков текста\n\n"
                  f"🎯 <b>Какой юридический документ составить на основе этого файла?</b>\n\n"
-                 f"1️⃣ 📜 <b>Справка о задолженности + Сопроводительное письмо</b> — официальная справка с таблицей расчетов и письмо в суд или должнику;\n"
-                 f"2️⃣ 🏛 <b>Исковое заявление в суд</b> — принудительное взыскание долга, неустойки и убытков;\n"
-                 f"3️⃣ 📑 <b>Досудебная претензия</b> — официальное требование контрагенту о погашении задолженности;\n"
-                 f"4️⃣ ⚡️ <b>Иск и Претензия (Вместе)</b> — сформировать оба документа одновременно;\n"
-                 f"5️⃣ 📊 <b>Анализ договора</b> — анализ рисков, санкций и сроков.\n\n"
+                 f"1️⃣ 📜 <b>Комплект для исполнительной надписи нотариуса (Приказ № 3757)</b> — заявление нотариусу, предупреждение должнику и проект надписи для прямого взыскания через БПИ (МИБ);\n"
+                 f"2️⃣ 📜 <b>Справка о задолженности + Сопроводительное письмо</b> — официальная справка с таблицей расчетов и письмо в суд или должнику;\n"
+                 f"3️⃣ 🏛 <b>Исковое заявление в суд</b> — принудительное взыскание долга, неустойки и убытков;\n"
+                 f"4️⃣ 📑 <b>Досудебная претензия</b> — официальное требование контрагенту о погашении задолженности;\n"
+                 f"5️⃣ ⚡️ <b>Иск и Претензия (Вместе)</b> — сформировать оба документа одновременно;\n"
+                 f"6️⃣ 📊 <b>Анализ договора</b> — анализ рисков, санкций и сроков.\n\n"
                  f"👇 <i>Выберите действие:</i>"
                  if lang == "ru" else
                  f"📄 <b>Document «{filename}» received successfully!</b>\n\n"
                  f"📊 <b>Size:</b> approx. {char_count:,} characters\n\n"
                  f"🎯 <b>Which legal document should we draft based on this file?</b>\n\n"
-                 f"1️⃣ 📜 <b>Certificate of Indebtedness + Cover Letter</b> — official accounting statement with itemized table and cover letter;\n"
-                 f"2️⃣ 🏛 <b>Court Lawsuit</b> — formal court claim for debt, interest, and damages;\n"
-                 f"3️⃣ 📑 <b>Pre-trial Demand Letter</b> — formal breach notice with cure period;\n"
-                 f"4️⃣ ⚡️ <b>Both Lawsuit & Demand Letter</b> — draft the complete litigation package;\n"
-                 f"5️⃣ 📊 <b>Contract Risk Analysis</b> — examine rights, liabilities, and risks.\n\n"
+                 f"1️⃣ 📜 <b>Notary Execution Inscription Package (Decree 3757)</b> — Application to Notary, warning notice to debtor, and draft inscription for direct MIB recovery;\n"
+                 f"2️⃣ 📜 <b>Certificate of Indebtedness + Cover Letter</b> — official accounting statement with itemized table and cover letter;\n"
+                 f"3️⃣ 🏛 <b>Court Lawsuit</b> — formal court claim for debt, interest, and damages;\n"
+                 f"4️⃣ 📑 <b>Pre-trial Demand Letter</b> — formal breach notice with cure period;\n"
+                 f"5️⃣ ⚡️ <b>Both Lawsuit & Demand Letter</b> — draft the complete litigation package;\n"
+                 f"6️⃣ 📊 <b>Contract Risk Analysis</b> — examine rights, liabilities, and risks.\n\n"
                  f"👇 <i>Choose an action below:</i>")
             )
             try:
@@ -1964,6 +2259,26 @@ async def handle_document_section_callback(callback: CallbackQuery):
         )
         await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
         await generate_legal_from_file(callback.message, status_msg, legal_id, "debt_cert", lang=lang)
+        return
+
+    if action == "legal_notary_exec":
+        legal_id = uuid.uuid4().hex[:8]
+        legal_pending_docs[legal_id] = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "filename": filename,
+            "text": text[:35000],
+            "caption": doc_data.get("caption", ""),
+            "created_at": datetime.now()
+        }
+        status_msg = await callback.message.answer(
+            "📜 <i>Ushbu hujjat asosida Notariusdan Ijro xati to'plami (3757-sonli qaror) tayyorlanmoqda, iltimos kuting...</i>" if lang == "uz" else
+            ("📜 <i>Формируется комплект для исполнительной надписи нотариуса (Приказ № 3757)...</i>" if lang == "ru" else
+             "📜 <i>Drafting Notary Execution Inscription package (Decree No. 3757)...</i>"),
+            parse_mode="HTML"
+        )
+        await callback.bot.send_chat_action(chat_id=callback.message.chat.id, action=ChatAction.TYPING)
+        await generate_legal_from_file(callback.message, status_msg, legal_id, "notary_exec", lang=lang)
         return
 
     # Bo'lim nomini aniqlash
@@ -3177,25 +3492,30 @@ async def handle_photo_message(message: Message):
     caption = message.caption or ""
     current_mode = user_active_mode.get(user_id, "NORMAL")
 
-    # Agar yuridik (LEGAL_DOC) rejimida rasm (tilxat, shartnoma, chek) yuborilgan bo'lsa:
-    if current_mode.startswith("LEGAL_DOC"):
-        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
+    # Agar yuridik (LEGAL_DOC yoki NOTARY) rejimida rasm (tilxat, shartnoma, chek) yuborilgan bo'lsa:
+    if current_mode.startswith("LEGAL_DOC") or current_mode.startswith("NOTARY"):
+        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else ("notary_both" if current_mode.startswith("NOTARY") else "lawsuit")
+        if current_mode.startswith("NOTARY") and not doc_subtype.startswith("notary"):
+            doc_subtype = f"notary_{doc_subtype}"
         target_name = (
-            "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+            "Notariusdan Ijro xati to'plami (3757-son)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+            ("Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
             ("Sudga Da'vo arizasi" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-            ("Talabnoma (Pretenziya)" if doc_subtype != "both" else "Da'vo va Talabnoma"))
+            ("Talabnoma (Pretenziya)" if doc_subtype != "both" else "Da'vo va Talabnoma")))
         )
         if lang == "ru":
             target_name = (
-                "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                "Комплект для исполнительной надписи нотариуса (Приказ № 3757)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+                ("Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
                 ("Исковое заявление в суд" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-                ("Досудебная претензия" if doc_subtype != "both" else "Иск и Претензия"))
+                ("Досудебная претензия" if doc_subtype != "both" else "Иск и Претензия")))
             )
         elif lang == "en":
             target_name = (
-                "Debt Certificate and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                "Notarial Execution Inscription Package (Decree 3757)" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+                ("Debt Certificate and Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
                 ("Court Lawsuit" if doc_subtype in ("lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage") else
-                ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
+                ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")))
             )
 
         wait_legal = (
@@ -3364,15 +3684,26 @@ async def handle_text_message(message: Message):
         await process_instagram_download(message, match.group(0))
         return
 
-    # 1.2. Rejim: LEGAL_DOC (Sudga Da'vo arizasi va Talabnoma)
-    if current_mode.startswith("LEGAL_DOC"):
-        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else "lawsuit"
+    # 1.2. Rejim: LEGAL_DOC yoki NOTARY (Sudga Da'vo, Talabnoma, Notarius Ijro xati)
+    if current_mode.startswith("LEGAL_DOC") or current_mode.startswith("NOTARY"):
+        doc_subtype = current_mode.split(":", 1)[1] if ":" in current_mode else ("notary_both" if current_mode.startswith("NOTARY") else "lawsuit")
+        if current_mode.startswith("NOTARY") and not doc_subtype.startswith("notary"):
+            doc_subtype = f"notary_{doc_subtype}"
         lang = get_user_lang(user_id)
 
+        wait_text = (
+            "📜 <i>Notariat to'g'risidagi qonun va 3757-sonli qaror talablari asosida Ijro xati to'plami tuzilmoqda, iltimos kuting...</i>"
+            if current_mode.startswith("NOTARY") and lang == "uz" else
+            ("📜 <i>Формируется комплект для исполнительной надписи нотариуса (Приказ № 3757)...</i>"
+             if current_mode.startswith("NOTARY") and lang == "ru" else
+             ("📜 <i>Drafting Notary Execution Inscription package (Decree No. 3757)...</i>"
+              if current_mode.startswith("NOTARY") and lang == "en" else
+              ("⚖️ <i>Qonun moddalari va rasmiy talablar asosida hujjat tuzilmoqda, iltimos kuting...</i>" if lang == "uz" else
+               ("⚖️ <i>Формируется официальный юридический документ со ссылками на законы...</i>" if lang == "ru" else
+                "⚖️ <i>Drafting official legal document with statutory grounds...</i>"))))
+        )
         status_msg = await message.reply(
-            "⚖️ <i>Qonun moddalari va rasmiy talablar asosida hujjat tuzilmoqda, iltimos kuting...</i>" if lang == "uz" else
-            ("⚖️ <i>Формируется официальный юридический документ со ссылками на законы...</i>" if lang == "ru" else
-             "⚖️ <i>Drafting official legal document with statutory grounds...</i>"),
+            wait_text,
             parse_mode="HTML"
         )
         await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
@@ -3394,21 +3725,24 @@ async def handle_text_message(message: Message):
                 return
 
             title_prefix = (
-                "Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                "Notarius Ijro xati" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+                ("Qarzdorlik ma'lumotnomasi va Ilova xati" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
                 ("Da'vo arizasi" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-                ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma"))
+                ("Talabnoma" if doc_subtype != "both" else "Da'vo va Talabnoma")))
             )
             if lang == "ru":
                 title_prefix = (
-                    "Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                    "Исполнительная надпись нотариуса" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+                    ("Справка о задолженности и Сопроводительное" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
                     ("Исковое заявление" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-                    ("Претензия" if doc_subtype != "both" else "Иск и Претензия"))
+                    ("Претензия" if doc_subtype != "both" else "Иск и Претензия")))
                 )
             elif lang == "en":
                 title_prefix = (
-                    "Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
+                    "Notary Execution Inscription" if doc_subtype.startswith("notary") or doc_subtype in ("notary_exec", "notary_app", "notary_notice", "notary_both") else
+                    ("Debt Certificate & Cover Letter" if doc_subtype in ("debt_cert", "debt_certificate", "malumotnoma") else
                     ("Court Claim" if any(k in doc_subtype for k in ["lawsuit", "debt", "contract", "alimony", "divorce", "labor", "damage"]) else
-                    ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand"))
+                    ("Demand Letter" if doc_subtype != "both" else "Lawsuit & Demand")))
                 )
 
             clean_snippet = format_doc_title("", text[:30], lang=lang)

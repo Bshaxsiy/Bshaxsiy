@@ -289,6 +289,62 @@ MESSAGES: Dict[str, Dict[str, str]] = {
             "👇 <i>Select a category below, upload your contract (Word, PDF), or describe your case:</i>"
         )
     },
+    "notary_menu": {
+        "uz": (
+            "📜 <b>Notarius Ijro xatini olish markazi</b>\n"
+            "<i>(O'zbekiston Respublikasining «Notariat to'g'risida»gi Qonuni 76-80-moddalari va Adliya vazirligining 3757-sonli qarori asosida)</i>\n\n"
+            "⚖️ <b>Sudga bormasdan, MIB orqali so'zsiz va tezkor undirish!</b>\n"
+            "Notariusning ijro xati sudning ijro varaqasi bilan teng yuridik kuchga ega («Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida»gi Qonun, 8-modda). "
+            "Sudda oylarcha vaqt sarflamasdan, bir necha kunda qarzdorning bank hisoblaridan pulni MIB orqali so'zsiz undirishingiz mumkin.\n\n"
+            "📋 <b>3757-sonli qaror bo'yicha undiriladigan holatlar:</b>\n"
+            "• Notarial tasdiqlangan bitimlar va qarz shartnomalari;\n"
+            "• Shartnomalar bo'yicha to'lanmagan qarzlar va hisob-kitob solishtiruvi akti (akt sverki);\n"
+            "• Ijara to'lovlari (turar va noturar joylar);\n"
+            "• Kommunal va ekspluatatsiya to'lovlari, servis kompaniyalari badallari;\n"
+            "• Lizing, bank va mikroqarz to'lovlari.\n\n"
+            "📑 <b>Bot sizga tayyorlab beradigan rasmiy to'plam:</b>\n"
+            "1️⃣ <b>Notariusga Ijro xati yozish to'g'risida Ariza:</b> Barcha rekvizitlar, hisob-kitoblar va qonuniy moddalar bilan;\n"
+            "2️⃣ <b>Qarzdorga rasmiy Ogohlantirish xati:</b> Qonun bo'yicha 10 kunlik muddat va MIB choralari haqida qat'iy bildirishnoma;\n"
+            "3️⃣ <b>Notariusning Ijro xati loyihasi:</b> MIBga topshiriladigan rasmiy ijro hujjati shakli.\n\n"
+            "👇 <i>Shartnoma/akt faylini (Word, PDF) yuboring yoki quyidagi bo'limlardan birini tanlang:</i>"
+        ),
+        "ru": (
+            "📜 <b>Центр получения Исполнительной надписи нотариуса</b>\n"
+            "<i>(На основании Закона РУз «О нотариате» ст. 76-80 и Приказа Минюста РУз № 3757)</i>\n\n"
+            "⚖️ <b>Бесспорное и быстрое взыскание долга через БПИ без долгих судебных процессов!</b>\n"
+            "Исполнительная надпись нотариуса имеет силу исполнительного документа (ст. 8 Закона «Об исполнении судебных актов и актов других органов»). "
+            "Не дожидаясь судебных заседаний, вы получаете исполнительный документ для принудительного списания средств со счетов должника через БПИ.\n\n"
+            "📋 <b>Случаи взыскания по Приказу Минюста № 3757:</b>\n"
+            "• Нотариально удостоверенные сделки и договоры займа;\n"
+            "• Неоплаченные договоры поставки, подряда, услуг с актами сверки;\n"
+            "• Задолженность по аренде помещений и имущества;\n"
+            "• Коммунальные платежи и взносы управляющих компаний;\n"
+            "• Лизинговые и кредитные обязательства.\n\n"
+            "📑 <b>Комплект документов, который формирует бот:</b>\n"
+            "1️⃣ <b>Заявление нотариусу о совершении исполнительной надписи:</b> С полным расчетом требований и нормами законов;\n"
+            "2️⃣ <b>Официальное предупреждение должнику:</b> С 10-дневным сроком погашения и разъяснением мер БПИ;\n"
+            "3️⃣ <b>Проект исполнительной надписи нотариуса:</b> Готовый исполнительный документ для БПИ.\n\n"
+            "👇 <i>Отправьте файл договора/акта (Word, PDF) или выберите нужное действие:</i>"
+        ),
+        "en": (
+            "📜 <b>Notarial Execution Inscription Center</b>\n"
+            "<i>(Pursuant to Law of Uzbekistan 'On Notaries' Arts 76-80 and MoJ Decree No. 3757)</i>\n\n"
+            "⚖️ <b>Expedited Undisputed Debt Recovery via MIB without Lengthy Court Litigation!</b>\n"
+            "A Notarial Execution Inscription has the legal force of a court execution writ (Art 8, Law 'On Enforcement'). "
+            "It empowers creditors to initiate compulsory enforcement by the Compulsory Enforcement Bureau (MIB) within days.\n\n"
+            "📋 <b>Eligible categories under Decree No. 3757:</b>\n"
+            "• Notarized contracts and promissory notes;\n"
+            "• Commercial contracts with reconciliation acts (akt sverki);\n"
+            "• Lease and rental defaults;\n"
+            "• Utility and building management fees;\n"
+            "• Leasing and financial obligations.\n\n"
+            "📑 <b>Complete Documentation Package Provided:</b>\n"
+            "1️⃣ <b>Application to Notary Public:</b> Detailed calculation, debtor data, and statutory grounds;\n"
+            "2️⃣ <b>Final Warning Notice to Debtor:</b> 10-day cure period warning of imminent MIB asset seizure;\n"
+            "3️⃣ <b>Draft Notarial Execution Inscription:</b> Official execution writ for MIB.\n\n"
+            "👇 <i>Upload your contract (Word, PDF) or choose an action below:</i>"
+        )
+    },
     "translator_menu": {
         "uz": (
             "🌐 <b>Aqlli Tarjimon bo'limi</b>\n\n"
@@ -450,6 +506,11 @@ BUTTON_TEXTS = {
         "ru": "⚖️ Иск и Претензия",
         "en": "⚖️ Lawsuit & Claim"
     },
+    "btn_notary": {
+        "uz": "📜 Notarius Ijro xati (3757)",
+        "ru": "📜 Исполнительная надпись (3757)",
+        "en": "📜 Notary Inscription (3757)"
+    },
     "btn_translator": {
         "uz": "🌐 Tarjimon",
         "ru": "🌐 Переводчик",
@@ -533,19 +594,22 @@ def get_main_keyboard_i18n(lang: str = "uz", is_admin: bool = False) -> ReplyKey
             KeyboardButton(text=btn("btn_legal", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_translator", lang)),
-            KeyboardButton(text=btn("btn_deep_research", lang))
+            KeyboardButton(text=btn("btn_notary", lang)),
+            KeyboardButton(text=btn("btn_translator", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_slides", lang)),
-            KeyboardButton(text=btn("btn_docs", lang))
+            KeyboardButton(text=btn("btn_deep_research", lang)),
+            KeyboardButton(text=btn("btn_slides", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_media", lang)),
-            KeyboardButton(text=btn("btn_ai_chat", lang))
+            KeyboardButton(text=btn("btn_docs", lang)),
+            KeyboardButton(text=btn("btn_media", lang))
         ],
         [
-            KeyboardButton(text=btn("btn_archive", lang)),
+            KeyboardButton(text=btn("btn_ai_chat", lang)),
+            KeyboardButton(text=btn("btn_archive", lang))
+        ],
+        [
             KeyboardButton(text=btn("btn_lang", lang))
         ]
     ]

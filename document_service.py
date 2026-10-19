@@ -184,13 +184,18 @@ def generate_docx(title: str, content: str, user_name: str = "", lang: str = "uz
         if not line:
             continue
 
-        # Yuridik hujjatlar maxsus sarlavhalari (Da'vo arizasi, Talabnoma, Ma'lumotnoma, Ilova xati, So'rayman)
+        # Yuridik hujjatlar maxsus sarlavhalari (Da'vo arizasi, Talabnoma, Ma'lumotnoma, Ilova xati, Notarius ijro xati, So'rayman)
         clean_upper = re.sub(r"[\*#`_]", "", line).strip().upper()
         if any(clean_upper.startswith(k) for k in [
             "DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM",
             "QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA", "QARZDORLIK TO'G'RISIDA MA'LUMOTNOMA", "MA'LUMOTNOMA",
             "ILOVA XATI", "KUZATUV XATI", "СПРАВКА О ЗАДОЛЖЕННОСТИ", "СОПРОВОДИТЕЛЬНОЕ ПИСЬМО",
-            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER", "STATEMENT OF DEBT", "1-QISM:", "2-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:"
+            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER", "STATEMENT OF DEBT",
+            "NOTARIUSGA ARIZA", "IJRO XATI YOZISH TO'G'RISIDA ARIZA", "IJRO XATI", "NOTARIUSNING IJRO XATI",
+            "OGOHLANTIRISH XATI", "BILDIRISHNOMA", "NOTARIAL OGOHLANTIRISH",
+            "ЗАЯВЛЕНИЕ НОТАРИУСУ", "ЗАЯВЛЕНИЕ О СОВЕРШЕНИИ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ", "ИСПОЛНИТЕЛЬНАЯ НАДПИСЬ", "ПРЕДУПРЕЖДЕНИЕ ДОЛЖНИКУ",
+            "APPLICATION TO NOTARY", "APPLICATION FOR EXECUTION INSCRIPTION", "EXECUTION INSCRIPTION", "NOTARIAL NOTICE",
+            "1-QISM:", "2-QISM:", "3-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:", "ЧАСТЬ 3:", "PART 1:", "PART 2:", "PART 3:"
         ]):
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -369,7 +374,12 @@ def generate_pdf(title: str, content: str, user_name: str = "", lang: str = "uz"
             "DA'VO ARIZASI", "TALABNOMA", "PRETENZIYA", "ИСКОВОЕ ЗАЯВЛЕНИЕ", "ДОСУДЕБНАЯ ПРЕТЕНЗИЯ", "STATEMENT OF CLAIM",
             "QARZDORLIK VA PENYA TO'G'RISIDA MA'LUMOTNOMA", "QARZDORLIK TO'G'RISIDA MA'LUMOTNOMA", "MA'LUMOTNOMA",
             "ILOVA XATI", "KUZATUV XATI", "СПРАВКА О ЗАДОЛЖЕННОСТИ", "СОПРОВОДИТЕЛЬНОЕ ПИСЬМО",
-            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER", "1-QISM:", "2-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:"
+            "CERTIFICATE OF INDEBTEDNESS", "COVER LETTER",
+            "NOTARIUSGA ARIZA", "IJRO XATI YOZISH TO'G'RISIDA ARIZA", "IJRO XATI", "NOTARIUSNING IJRO XATI",
+            "OGOHLANTIRISH XATI", "BILDIRISHNOMA", "NOTARIAL OGOHLANTIRISH",
+            "ЗАЯВЛЕНИЕ НОТАРИУСУ", "ЗАЯВЛЕНИЕ О СОВЕРШЕНИИ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ", "ИСПОЛНИТЕЛЬНАЯ НАДПИСЬ", "ПРЕДУПРЕЖДЕНИЕ ДОЛЖНИКУ",
+            "APPLICATION TO NOTARY", "APPLICATION FOR EXECUTION INSCRIPTION", "EXECUTION INSCRIPTION", "NOTARIAL NOTICE",
+            "1-QISM:", "2-QISM:", "3-QISM:", "ЧАСТЬ 1:", "ЧАСТЬ 2:", "ЧАСТЬ 3:", "PART 1:", "PART 2:", "PART 3:"
         ]):
             center_heading_style = ParagraphStyle(
                 f"CenterLegalHead_{uuid.uuid4().hex[:6]}",

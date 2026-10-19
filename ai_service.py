@@ -705,6 +705,10 @@ class AIService:
             "debt_cert": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
             "debt_certificate": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
             "malumotnoma": "Qarzdorlik to'g'risida Ma'lumotnoma va Ilova xati (Rasmiy to'plam)",
+            "notary_exec": "Notariusdan Ijro xati olish to'g'risida Ariza va Ogohlantirish xati",
+            "notary_app": "Notariusga Ijro xati yozish to'g'risida Ariza",
+            "notary_notice": "Qarzdorga notarial ogohlantirish xati (Bildirishnoma)",
+            "notary_both": "Notariusga Ijro xati arizasi va Ogohlantirish to'plami",
             "upload": "Shartnoma/Hujjat asosida Sudga Da'vo arizasi",
             "contract_lawsuit": "Shartnoma bo'yicha Sudga Da'vo arizasi",
             "contract_demand": "Shartnoma bo'yicha Sudgacha Talabnoma (Pretenziya)",
@@ -720,7 +724,136 @@ class AIService:
         }
         type_name = type_titles.get(doc_type, "Sudga Da'vo arizasi / Talabnoma")
 
-        if doc_type in ("debt_cert", "debt_certificate", "malumotnoma"):
+        if doc_type.startswith("notary") or doc_type in ("notary_exec", "notary_app", "notary_notice", "notary_both", "notary", "ijro_xati"):
+            if lang == "ru":
+                prompt = (
+                    "Вы — ведущий юрисконсульт по нотариальному праву, эксперт по бесспорному взысканию задолженности и принудительному исполнению в Республике Узбекистан.\n\n"
+                    "ЗАДАЧА: На основе предоставленных пользователем данных (договор, расписка, акт сверки взаиморасчетов, счет-фактуры, задолженность) "
+                    "составьте официальный комплект документов для получения ИСПОЛНИТЕЛЬНОЙ НАДПИСИ НОТАРИУСА (Notarius ijro xati) "
+                    "в строгом соответствии с Законом Республики Узбекистан «О нотариате» (статьи 76–80), Приказом / Положением Министерства юстиции Республики Узбекистан № 3757 "
+                    "и Законом РУз «Об исполнении судебных актов и актов других органов» (статья 8).\n\n"
+                    f"ИСХОДНЫЕ ДАННЫЕ И МАТЕРИАЛЫ:\n{details}\n\n"
+                    "🔴 ОБЯЗАТЕЛЬНАЯ СТРУКТУРА ДОКУМЕНТА (3 ЧАСТИ ЧЕРЕЗ РАЗДЕЛИТЕЛЬ '---'):\n\n"
+                    "ЧАСТЬ 1: ЗАЯВЛЕНИЕ НОТАРИУСУ О СОВЕРШЕНИИ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ\n"
+                    "• Адресат: Частнопрактикующему / государственному нотариусу нотариального округа [Город / Район, Ф.И.О. нотариуса при наличии];\n"
+                    "• Взыскатель: [Наименование организации / Ф.И.О. гражданина, ИНН/ПИНФЛ, юридический адрес, телефон, банковские реквизиты: р/счет, банк, МФО];\n"
+                    "• Должник: [Наименование организации / Ф.И.О. гражданина, ИНН/ПИНФЛ, адрес места жительства/нахождения, телефон, банковские реквизиты];\n"
+                    "• Заголовок по центру: ЗАЯВЛЕНИЕ О СОВЕРШЕНИИ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ\n"
+                    "  (в порядке статей 76-80 Закона РУз «О нотариате» и Приказа Минюста РУз № 3757)\n"
+                    "• Обстоятельства дела: Подробное описание договора/расписки (дата, номер), обязательства по поставке/оплате, возникшая задолженность, подтверждение признания долга (акт сверки, счета-фактуры), отсутствие спора о праве;\n"
+                    "• Соблюдение порядка уведомления: Указание на направление должнику письменного требования-предупреждения и истечение срока для добровольного погашения;\n"
+                    "• Расчет требований: Основной долг, начисленные штрафные санкции (если предусмотрены договором/законом), государственная пошлина и плата за правовые услуги нотариуса;\n"
+                    "• Правовое основание: Статьи 76, 77, 78, 79, 80 Закона РУз «О нотариате», Приказ Минюста № 3757, ст. 8 Закона «Об исполнении судебных актов и актов других органов», ст. 236, 237, 327 ГК РУз;\n"
+                    "• ПРОШУ (по пунктам):\n"
+                    "  1. Совершить исполнительную надпись о бесспорном взыскании с Должника в пользу Взыскателя задолженности в размере ... (...) сум;\n"
+                    "  2. Взыскать с Должника уплаченную государственную пошлину и расходы за услуги нотариуса в размере ... сум;\n"
+                    "• Перечень приложений (копия договора, акт сверки взаиморасчетов, копия уведомления должнику и почтовой квитанции, квитанция об оплате госпошлины);\n"
+                    "• Подпись: Взыскатель / Руководитель: _______________ (Ф.И.О.) / М.П., Дата.\n\n"
+                    "---\n\n"
+                    "ЧАСТЬ 2: ОФИЦИАЛЬНОЕ УВЕДОМЛЕНИЕ-ПРЕДУПРЕЖДЕНИЕ ДОЛЖНИКУ\n"
+                    "• Исходящий номер и дата;\n"
+                    "• Кому (Должник): Руководителю [Наименование организации / Ф.И.О.], адрес;\n"
+                    "• От кого (Взыскатель): [Наименование, реквизиты, контакты];\n"
+                    "• Заголовок по центру: ПРЕДУПРЕЖДЕНИЕ О СОВЕРШЕНИИ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ НОТАРИУСА\n"
+                    "• Текст: В соответствии со статьями 76–80 Закона РУз «О нотариате» и Приказом Минюста № 3757 уведомляем, что в случае непогашения задолженности по Договору № ___ в сумме ... сум в 10-дневный срок с момента получения настоящего уведомления, мы обратимся к нотариусу за совершением ИСПОЛНИТЕЛЬНОЙ НАДПИСИ.\n"
+                    "• Разъяснение правовых последствий: Исполнительная надпись нотариуса имеет силу исполнительного листа (ст. 8 Закона «Об исполнении судебных актов») и будет немедленно предъявлена в Бюро принудительного исполнения (БПИ) при Генеральной прокуратуре РУз для наложения ареста на расчетные счета и принудительного обращения взыскания на имущество с возложением всех расходов на должника;\n"
+                    "• Реквизиты для оплаты;\n"
+                    "• Подпись: Взыскатель _______________ (Ф.И.О.).\n\n"
+                    "---\n\n"
+                    "ЧАСТЬ 3: ПРОЕКТ ИСПОЛНИТЕЛЬНОЙ НАДПИСИ НОТАРИУСА\n"
+                    "• Заголовок по центру: ИСПОЛНИТЕЛЬНАЯ НАДПИСЬ\n"
+                    "• Дата совершения и место совершения;\n"
+                    "• Сведения о нотариусе, взыскателе и должнике;\n"
+                    "• Распоряжение нотариуса о взыскании с должника в пользу взыскателя денежных средств в бесспорном порядке;\n"
+                    "• Указание о немедленной передаче в органы Бюро принудительного исполнения (БПИ);\n"
+                    "• Взысканная государственная пошлина и гербовый сбор, номер в реестре, подпись и гербовая печать нотариуса.\n\n"
+                    "100% чистый юридический русский язык, строгие формулировки законов, без лишних вводных фраз."
+                )
+            elif lang == "en":
+                prompt = (
+                    "You are a senior legal expert in notarial enforcement and debt recovery under the laws of the Republic of Uzbekistan.\n\n"
+                    "TASK: Based on the provided contract, debt records, or reconciliation statements, draft a complete official document package "
+                    "for obtaining a NOTARIAL EXECUTION INSCRIPTION (Notarius ijro xati) pursuant to the Law of the Republic of Uzbekistan 'On Notaries' (Articles 76–80), "
+                    "Ministry of Justice Decree No. 3757 (Rules on Notarial Execution Inscriptions), and the Law 'On Enforcement of Judicial and Other Acts' (Article 8).\n\n"
+                    f"SOURCE DATA:\n{details}\n\n"
+                    "🔴 MANDATORY STRUCTURE (3 DISTINCT PARTS SEPARATED BY '---'):\n\n"
+                    "PART 1: FORMAL APPLICATION TO NOTARY PUBLIC FOR EXECUTION INSCRIPTION\n"
+                    "• Addressed to Notary Public of relevant district;\n"
+                    "• Creditor and Debtor details (Tax ID, address, banking credentials);\n"
+                    "• Centered Title: APPLICATION FOR ISSUANCE OF NOTARIAL EXECUTION INSCRIPTION\n"
+                    "• Factual background regarding undisputed contractual default, reconciliation statement, and lack of bona fide dispute;\n"
+                    "• Compliance with formal pre-notification to debtor;\n"
+                    "• Exact calculation of principal debt, statutory interests, and notary service charges;\n"
+                    "• Statutory references: Law 'On Notaries' Arts 76-80, MoJ Decree 3757, Law 'On Enforcement' Art 8, Civil Code Arts 236, 237, 327;\n"
+                    "• Prayer for Relief requesting notarial execution inscription;\n"
+                    "• List of exhibits, signature, and date.\n\n"
+                    "---\n\n"
+                    "PART 2: FORMAL NOTICE AND FINAL WARNING TO DEBTOR\n"
+                    "• Outgoing number and date;\n"
+                    "• Addressed to Debtor executive management;\n"
+                    "• Centered Title: FORMAL NOTICE OF FORTHCOMING NOTARIAL EXECUTION INSCRIPTION\n"
+                    "• Demand to settle outstanding debt within 10 days;\n"
+                    "• Warning that failure will result in immediate Notarial Execution Inscription enforceable by the Compulsory Enforcement Bureau (MIB) with asset freeze and bank debiting;\n"
+                    "• Payment account details and creditor signature.\n\n"
+                    "---\n\n"
+                    "PART 3: DRAFT NOTARIAL EXECUTION INSCRIPTION\n"
+                    "• Centered Title: NOTARIAL EXECUTION INSCRIPTION\n"
+                    "• Formal order commanding enforcement by the Compulsory Enforcement Bureau (MIB);\n"
+                    "• Registry number, fee notation, Notary seal and signature block.\n\n"
+                    "Professional legal English, complete factual drafting without placeholders, no conversational filler."
+                )
+            else:
+                prompt = (
+                    "Siz O'zbekiston Respublikasining notariat sohasi bo'yicha bosh yuristkonsulti, notarius va majburiy ijro bo'yicha yetakchi ekspertsiz.\n\n"
+                    "VAZIFA: Foydalanuvchi taqdim etgan shartnoma, qarz tilxati, hisob-kitob solishtiruvi dalolatnomasi (akt sverki), "
+                    "hisob-fakturalar yoki qarzdorlik ma'lumotlari asosida NOTARIUSDAN IJRO XATI OLISH UCHUN rasmiy va qonuniy to'liq hujjatlar to'plamini tuzib bering.\n\n"
+                    "HUQUQIY ASOSLAR:\n"
+                    "• O'zbekiston Respublikasining «Notariat to'g'risida»gi Qonuni 76, 77, 78, 79, 80-moddalari (Ijro xatlarini yozish tartibi, shartlari va mazmuni);\n"
+                    "• O'zbekiston Respublikasi Adliya vazirligi tomonidan tasdiqlangan 3757-sonli qaror (Notariuslar tomonidan ijro xatlarini yozish tartibi to'g'risidagi yo'riqnoma va so'zsiz undiriladigan hujjatlar ro'yxati);\n"
+                    "• O'zbekiston Respublikasi «Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida»gi Qonunining 8-moddasi 1-qismi 5-bandi (Notariuslarning ijro xatlari to'g'ridan-to'g'ri MIB uchun ijro hujjati hisoblanishi);\n"
+                    "• O'zbekiston Respublikasi Fuqarolik kodeksining 236, 237, 327, 333-moddalari.\n\n"
+                    f"FOYDALANUVCHI TAQDIM ETGAN HUJJAT VA TAFSILOTLAR:\n{details}\n\n"
+                    "🔴 QAT'IY TALABLAR (HUJJATLAR TO'PLAMI KETMA-KET 3 TA QISMDAN IBORAT BO'LIB, O'RTASIDA '---' AJRATKICHI BO'LISHI SHART):\n\n"
+                    "1-QISM: NOTARIUSGA IJRO XATI YOZISH TO'G'RISIDA ARIZA (ILTIMOSNOMA)\n"
+                    "• Kimga: [Tuman/Shahar] davlat notarial idorasi (yoki xususiy amaliyot bilan shug'ullanuvchi) notariusi [Notarius F.I.Sh.]ga;\n"
+                    "• Undiruvchi (Kreditor): Tashkilot nomi yoki F.I.Sh., STIR/JShShIR, yuridik manzili, hisob-raqami, bank nomi, MFO, telefon;\n"
+                    "• Qarzdor: Tashkilot nomi yoki F.I.Sh., STIR/JShShIR, yuridik/yashash manzili, telefon raqami, bank rekvizitlari;\n"
+                    "• Katta sarlavha: NOTARIUSGA IJRO XATI YOZISH TO'G'RISIDA ARIZA\n"
+                    "  (O'zR «Notariat to'g'risida»gi Qonuni 76-80-moddalari va Adliya vazirligining 3757-sonli qaroriga asosan)\n"
+                    "• Holat bayoni: [Sana] dagi [№] -sonli Shartnoma, o'zaro hisob-kitob solishtiruvi dalolatnomasi, yetkazib berilgan tovar/xizmatlar, qarzdorlik qachon vujudga kelgani, to'lov muddati qachon tugagani va nizo mavjud emasligi;\n"
+                    "• Ogohlantirish xati yuborilganligi: Qarzdorga yozma ravishda ogohlantirish xati yuborilganligi va berilgan ixtiyoriy muddatda qarz to'lanmaganligi;\n"
+                    "• Undiriladigan summa hisob-kitobi: Asosiy qarz summasi + shartnomaviy penya + to'langan davlat boji va notarial xizmat haqi;\n"
+                    "• Qonuniy asos: «Notariat to'g'risida»gi Qonun 76-80-moddalari, Adliya vazirligining 3757-sonli qarori, «Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida»gi Qonunning 8-moddasi, FK 236, 237, 327-moddalari;\n"
+                    "• SO'RAYMAN (bandma-band):\n"
+                    "  1. Qarzdor [Qarzdor F.I.Sh./Nomi]dan undiruvchi [Undiruvchi F.I.Sh./Nomi] foydasiga ... (...) so'm asosiy qarz summasini so'zsiz tartibda undirish to'g'risida IJRO XATI YOZIB BERISHINGIZNI;\n"
+                    "  2. Undiruvchi tomonidan to'langan ... so'm davlat boji va notarial xizmat haqini qarzdor hisobidan undirib berishingizni.\n"
+                    "• Ilovalar ro'yxati (Shartnoma nusxasi, o'zaro hisob-kitob solishtiruvi dalolatnomasi, schyot-fakturalar, qarzdorga yuborilgan ogohlantirish xati va pochta kvitansiyasi, davlat boji to'langanligi kvitansiyasi);\n"
+                    "• Undiruvchi (Rahbar): _______________ (F.I.Sh.)  M.O'.  Sana: 202_ yil «___» ___________\n\n"
+                    "---\n\n"
+                    "2-QISM: QARZDORGA RASMIY OGOHLANTIRISH XATI (NOTARIAL BILDIRISHNOMA)\n"
+                    "• Chiqish raqami va sana: Chiqish № _____ 202_ yil «___» ___________\n"
+                    "• Kimga: [Qarzdor korxona rahbari F.I.Sh. yoki fuqaro ismi], manzili;\n"
+                    "• Kimdan: [Undiruvchi tashkilot/fuqaro], rekvizitlari;\n"
+                    "• Katta sarlavha: OGOHLANTIRISH XATI (BILDIRISHNOMA)\n"
+                    "  (Notarius tomonidan ijro xati yozilishi va MIBga yuborilishi to'g'risida)\n"
+                    "• Matn: O'zbekiston Respublikasining «Notariat to'g'risida»gi Qonuni 76–80-moddalari hamda Adliya vazirligining 3757-sonli qarori talablariga muvofiq, [Sana] dagi [№] -sonli Shartnoma bo'yicha to'lanmagan ... (...) so'm qarzdorlikni ushbu xat olingan kundan boshlab 10 (o'n) kun ichida ixtiyoriy ravishda quyidagi bank hisob-raqamiga to'lashingizni yoki yozma asoslantirilgan e'tirozingizni bildirishingizni talab qilamiz;\n"
+                    "• Huquqiy oqibatlar haqida qat'iy ogohlantirish: Agar ko'rsatilgan 10 kunlik muddatda qarz to'lanmasa, sud muhokamalarisiz NOTARIUS TOMONIDAN IJRO XATI YOZILADI. Notariusning ijro xati ijro hujjati bo'lib («Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida»gi Qonun 8-moddasi), darhol O'zR Bosh prokuraturasi huzuridagi Majburiy ijro byurosi (MIB)ga topshiriladi. MIB tomonidan barcha bank hisoblaringizga band solinadi va mol-mulkingiz xatlanib, majburiy undiruvga qaratiladi. Barcha ijro xarajatlari hamda davlat boji qarzdor hisobidan undiriladi;\n"
+                    "• To'lov uchun bank rekvizitlari;\n"
+                    "• Imzo: Undiruvchi rahbar _______________ (F.I.Sh.) M.O'.\n\n"
+                    "---\n\n"
+                    "3-QISM: NOTARIUSNING IJRO XATI RASMIY LOYIHASI\n"
+                    "• Katta sarlavha: IJRO XATI\n"
+                    "• Yozilgan sana va joy (shahar/tuman);\n"
+                    "• Notarius rekvizitlari (notarial okrug, notarius F.I.Sh.);\n"
+                    "• Undiruvchi va qarzdor rekvizitlari;\n"
+                    "• Qarzdorlik undiriladigan davr va asos hujjatlar;\n"
+                    "• Farmoyish matni: «O'zbekiston Respublikasining 'Notariat to'g'risida'gi Qonunining 76-80-moddalari va Adliya vazirligining 3757-sonli qarori talablariga asosan, Qarzdor [Nomi/F.I.Sh.]dan Undiruvchi [Nomi/F.I.Sh.] foydasiga ... so'm qarz summasi va ... so'm davlat boji undirilsin. Ushbu ijro xati O'zbekiston Respublikasi 'Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida'gi Qonunning 8-moddasiga asosan ijro hujjati kuchiga ega bo'lib, MIB organlari tomonidan majburiy ijro etilishi lozim.»;\n"
+                    "• Reyestrda qayd qilingan raqam va undirilgan davlat boji/to'lov summasi;\n"
+                    "• Notarius imzosi va gerbli muhr joyi (M.O'.).\n\n"
+                    "1. 100% sof va rasmiy o'zbek tilida (lotin alifbosida), mukammal yuridik atamalar bilan, O'zbekiston qonunchiligiga to'liq mos ravishda yozilsin.\n"
+                    "2. To'g'ridan-to'g'ri tayyor hujjatlar to'plamini chiqaring, ortiqcha salom-alik yoki kirish so'zlarisiz."
+                )
+        elif doc_type in ("debt_cert", "debt_certificate", "malumotnoma"):
             if lang == "ru":
                 prompt = (
                     "Вы — главный юрисконсульт и главный бухгалтер-аудитор высшей квалификации.\n\n"
