@@ -39,8 +39,9 @@ class GuardMiddleware(BaseMiddleware):
 
         user_id = user.id
 
-        # 1. Agar foydalanuvchiga ruxsat berilgan bo'lsa -> davom etish
+        # 1. Agar foydalanuvchiga ruxsat berilgan bo'lsa -> faollikni yangilash va davom etish
         if access_guard.is_user_allowed(user_id):
+            access_guard.touch_user(user_id, name=user.full_name, username=user.username or "")
             return await handler(event, data)
 
         # 2. Ruxsati yo'q bo'lsa:

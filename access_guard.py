@@ -94,11 +94,13 @@ class AccessGuard:
     def add_user(self, user_id: int, name: str = "", username: str = "", added_by: str = "ADMIN") -> bool:
         """ Foydalanuvchini ruxsat berilganlar ro'yxatiga qo'shish """
         str_id = str(user_id)
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.data["allowed_users"][str_id] = {
             "name": name or f"Foydalanuvchi_{user_id}",
             "username": username or "",
-            "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "added_by": added_by
+            "added_at": now_str,
+            "added_by": added_by,
+            "last_active": now_str
         }
         # Kutilayotgan so'rovlardan o'chirish
         if str_id in self.data.get("pending_requests", {}):
@@ -108,15 +110,58 @@ class AccessGuard:
         logger.info(f"Foydalanuvchi qo'shildi: {user_id} ({name}) by {added_by}")
         return True
 
+    def touch_user(self, user_id: int, name: str = "", username: str = ""):
+        """ Foydalanuvchining oxirgi faollik vaqti va profil ma'lumotlarini yangilash """
+        str_id = str(user_id)
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if str_id in self.data.get("allowed_users", {}):
+            user_entry = self.data["allowed_users"][str_id]
+            user_entry["last_active"] = now_str
+            if name and name != user_entry.get("name"):
+                user_entry["name"] = name
+            if username and username != user_entry.get("username"):
+                user_entry["username"] = username
+            self.save()
+        elif not self.data.get("restricted_mode", True) or self.is_admin(user_id):
+            self.data.setdefault("allowed_users", {})[str_id] = {
+                "name": name or f"Foydalanuvchi_{user_id}",
+                "username": username or "",
+                "added_at": now_str,
+                "added_by": "SYSTEM",
+                "last_active": now_str
+            }
+            self.save()
+
     def remove_user(self, user_id: int) -> bool:
         """ Foydalanuvchini ro'yxatdan o'chirish (ruxsatni bekor qilish) """
         str_id = str(user_id)
-        if str_id in self.data["allowed_users"]:
+        changed = False
+        if str_id in self.data.get("allowed_users", {}):
             del self.data["allowed_users"][str_id]
+            changed = True
+        if str_id in self.data.get("pending_requests", {}):
+            del self.data["pending_requests"][str_id]
+            changed = True
+        # Agar admin bo'lsa (lekin ENV dagi asosiy admin bo'lmasa), admin_ids dan ham chiqarish
+        if user_id in self.data.get("admin_ids", []) and user_id not in ADMIN_IDS:
+            self.data["admin_ids"].remove(user_id)
+            changed = True
+        if changed:
             self.save()
             logger.info(f"Foydalanuvchi o'chirildi: {user_id}")
             return True
         return False
+
+    def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """ Foydalanuvchi ma'lumotlarini olish """
+        str_id = str(user_id)
+        info = self.data.get("allowed_users", {}).get(str_id)
+        if info:
+            res = dict(info)
+            res["user_id"] = user_id
+            res["is_admin"] = self.is_admin(user_id)
+            return res
+        return None
 
     def add_admin(self, user_id: int, name: str = "", username: str = "") -> bool:
         """ Yangi admin tayinlash """

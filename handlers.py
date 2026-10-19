@@ -22,7 +22,7 @@ from aiogram.enums import ChatAction
 from aiogram.exceptions import TelegramBadRequest
 
 import config
-from config import DOWNLOADS_DIR, BASE_DIR
+from config import DOWNLOADS_DIR, BASE_DIR, ADMIN_IDS
 from downloader import (
     download_instagram_video,
     extract_audio_from_video,
@@ -4117,7 +4117,10 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="👥 Foydalanuvchilar ro'yxati", callback_data="adm:list_users"),
+                InlineKeyboardButton(text="👥 Foydalanuvchilar ro'yxati", callback_data="adm:list_users:0"),
+                InlineKeyboardButton(text="🗑 Userni o'chirish", callback_data="adm:select_delete:0")
+            ],
+            [
                 InlineKeyboardButton(text=toggle_text, callback_data="adm:toggle_mode")
             ],
             [
@@ -4128,9 +4131,108 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def render_users_list(page: int = 0, select_delete: bool = False, admin_id: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    """Foydalanuvchilar ro'yxati matni va boshqaruv klaviaturasi (sahifalash bilan)"""
+    all_users = access_guard.get_allowed_users()
+    admin_ids = access_guard.get_admins()
+
+    if not all_users:
+        msg = "ℹ️ <b>Hozircha botda foydalanuvchilar mavjud emas.</b>"
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Yangi user qo'shish", callback_data="adm:help_add")],
+            [InlineKeyboardButton(text="🔙 Admin panelga qaytish", callback_data="adm:panel")]
+        ])
+        return msg, kb
+
+    # Foydalanuvchilarni saralash: adminlar birinchi, so'ngra yangi qo'shilganlar
+    def sort_key(item):
+        uid_str, info = item
+        uid = int(uid_str) if uid_str.isdigit() else 0
+        is_adm = uid in admin_ids
+        added = info.get("added_at", "")
+        return (1 if is_adm else 0, added)
+
+    sorted_users = sorted(all_users.items(), key=sort_key, reverse=True)
+
+    per_page = 6
+    total_users = len(sorted_users)
+    total_pages = max(1, (total_users + per_page - 1) // per_page)
+    page = max(0, min(page, total_pages - 1))
+
+    start_idx = page * per_page
+    end_idx = start_idx + per_page
+    page_users = sorted_users[start_idx:end_idx]
+
+    mode_title = (
+        "🗑 <b>FOYDALANUVCHINI BOTDAN O'CHIRISH</b>\n"
+        "<i>Quyidagi foydalanuvchilar ro'yxatidan o'chirmoqchi bo'lgan shaxsni tanlang:</i>"
+        if select_delete else
+        "👥 <b>BOTDAN FOYDALANUVCHILAR RO'YXATI</b>"
+    )
+
+    msg = (
+        f"{mode_title}\n\n"
+        f"📊 Jami foydalanuvchilar: <b>{total_users}</b> nafar | Sahifa: <b>{page + 1}/{total_pages}</b>\n\n"
+    )
+
+    kb_rows = []
+
+    for idx, (uid_str, info) in enumerate(page_users, start=start_idx + 1):
+        uid = int(uid_str) if uid_str.isdigit() else 0
+        is_adm = uid in admin_ids
+        badge = "👑 [Admin]" if is_adm else "👤 [User]"
+        uname = f"@{info.get('username')}" if info.get('username') else "username yo'q"
+        name = info.get('name', 'Nomsiz')
+        added_at = info.get('added_at', '-')
+        last_act = info.get('last_active') or added_at
+
+        msg += (
+            f"<b>{idx}. {badge} {name}</b> ({uname})\n"
+            f"   🆔 ID: <code>{uid_str}</code>\n"
+            f"   📅 Qo'shildi: {added_at}\n"
+            f"   ⚡️ Faollik: {last_act}\n\n"
+        )
+
+        # O'chirish tugmasi: O'zini va ENV dagi super adminni o'chirish taqiqlanadi
+        is_self = (uid == admin_id)
+        is_super = (uid in ADMIN_IDS)
+        if not is_self and not is_super:
+            clean_btn_name = name[:16]
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text=f"🗑 O'chirish: {clean_btn_name} ({uid_str[-4:]})",
+                    callback_data=f"adm:del_prompt:{uid_str}"
+                )
+            ])
+
+    # Sahifalash tugmalari
+    if total_pages > 1:
+        nav_buttons = []
+        if page > 0:
+            cb_prev = f"adm:select_delete:{page - 1}" if select_delete else f"adm:list_users:{page - 1}"
+            nav_buttons.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=cb_prev))
+        nav_buttons.append(InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="adm:noop"))
+        if page < total_pages - 1:
+            cb_next = f"adm:select_delete:{page + 1}" if select_delete else f"adm:list_users:{page + 1}"
+            nav_buttons.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=cb_next))
+        kb_rows.append(nav_buttons)
+
+    # Qo'shimcha amallar
+    cb_refresh = f"adm:select_delete:{page}" if select_delete else f"adm:list_users:{page}"
+    kb_rows.append([
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data=cb_refresh),
+        InlineKeyboardButton(text="➕ Yangi user qo'shish", callback_data="adm:help_add")
+    ])
+    kb_rows.append([
+        InlineKeyboardButton(text="🔙 Admin panelga qaytish", callback_data="adm:panel")
+    ])
+
+    return msg, InlineKeyboardMarkup(inline_keyboard=kb_rows)
+
+
 @router.message(Command("admin"))
 @router.message(Command("qoriqchi"))
-@router.message(F.text == "🛡 Qo'riqchi (Admin)")
+@router.message(F.text.in_(get_all_button_variants("btn_guard")))
 async def handle_admin_panel(message: Message):
     """Admin paneli"""
     if not access_guard.is_admin(message.from_user.id):
@@ -4141,6 +4243,33 @@ async def handle_admin_panel(message: Message):
         parse_mode="HTML",
         reply_markup=get_admin_panel_keyboard()
     )
+
+
+@router.callback_query(F.data == "adm:panel")
+async def handle_adm_panel_callback(callback: CallbackQuery):
+    """Admin paneliga qaytish callbacki"""
+    if not access_guard.is_admin(callback.from_user.id):
+        await callback.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        return
+    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            get_admin_panel_text(),
+            parse_mode="HTML",
+            reply_markup=get_admin_panel_keyboard()
+        )
+    except Exception:
+        await callback.message.answer(
+            get_admin_panel_text(),
+            parse_mode="HTML",
+            reply_markup=get_admin_panel_keyboard()
+        )
+
+
+@router.callback_query(F.data == "adm:noop")
+async def handle_adm_noop(callback: CallbackQuery):
+    """Sahifa ko'rsatkich tugmasi uchun noop"""
+    await callback.answer()
 
 
 @router.callback_query(F.data == "adm:toggle_mode")
@@ -4162,37 +4291,157 @@ async def handle_adm_toggle_mode(callback: CallbackQuery):
         pass
 
 
-@router.callback_query(F.data == "adm:list_users")
+@router.callback_query(F.data.startswith("adm:list_users"))
+@router.callback_query(F.data.startswith("adm:select_delete"))
+async def handle_list_users_callback(callback: CallbackQuery):
+    """Foydalanuvchilar ro'yxati callbacki (sahifalash va o'chirish rejimi bilan)"""
+    if not access_guard.is_admin(callback.from_user.id):
+        await callback.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        return
+    await callback.answer()
+
+    parts = callback.data.split(":")
+    is_delete_mode = (parts[1] == "select_delete")
+    page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+
+    msg, kb = render_users_list(page=page, select_delete=is_delete_mode, admin_id=callback.from_user.id)
+    try:
+        await callback.message.edit_text(msg, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        await callback.message.answer(msg, parse_mode="HTML", reply_markup=kb)
+
+
 @router.message(Command("users"))
-async def handle_list_users(event: Message | CallbackQuery):
-    """Ruxsat berilganlar ro'yxati"""
-    user_id = event.from_user.id
-    if not access_guard.is_admin(user_id):
-        if isinstance(event, CallbackQuery):
-            await event.answer("🔒 Faqat adminlar uchun!", show_alert=True)
-        else:
-            await event.reply("🔒 Faqat adminlar uchun!")
+async def handle_list_users_cmd(message: Message):
+    """Ruxsat berilganlar ro'yxatini ko'rish buyrug'i: /users"""
+    if not access_guard.is_admin(message.from_user.id):
+        await message.reply("🔒 Faqat adminlar uchun!")
         return
 
-    users = access_guard.get_allowed_users()
-    if not users:
-        msg = "ℹ️ Hozircha ruxsat berilgan qo'shimcha foydalanuvchilar mavjud emas."
-    else:
-        msg = f"👥 <b>Ruxsat berilgan foydalanuvchilar ({len(users)} ta):</b>\n\n"
-        for idx, (uid, info) in enumerate(users.items(), 1):
-            uname = f"@{info.get('username')}" if info.get('username') else "username yo'q"
-            msg += (
-                f"<b>{idx}. {info.get('name', 'Nomsiz')}</b> ({uname})\n"
-                f"   🆔 ID: <code>{uid}</code>\n"
-                f"   📅 Qo'shildi: {info.get('added_at', '-')}\n"
-                f"   👑 Qo'shdi: {info.get('added_by', '-')}\n\n"
-            )
+    msg, kb = render_users_list(page=0, select_delete=False, admin_id=message.from_user.id)
+    await message.answer(msg, parse_mode="HTML", reply_markup=kb)
 
-    if isinstance(event, CallbackQuery):
-        await event.answer()
-        await event.message.answer(msg, parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("adm:del_prompt:"))
+async def handle_del_prompt(callback: CallbackQuery):
+    """Foydalanuvchini o'chirishdan oldin tasdiqlash oynasi"""
+    admin_id = callback.from_user.id
+    if not access_guard.is_admin(admin_id):
+        await callback.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        return
+
+    target_id_str = callback.data.split(":")[2]
+    target_id = int(target_id_str) if target_id_str.isdigit() else 0
+
+    if target_id == admin_id:
+        await callback.answer("⚠️ O'zingizni o'chira olmaysiz!", show_alert=True)
+        return
+
+    if target_id in ADMIN_IDS:
+        await callback.answer("⚠️ Asosiy bosh administratorni o'chirib bo'lmaydi!", show_alert=True)
+        return
+
+    user_info = access_guard.get_user_info(target_id)
+    if not user_info:
+        await callback.answer("ℹ️ Foydalanuvchi allaqachon o'chirilgan yoki topilmadi.", show_alert=True)
+        msg, kb = render_users_list(page=0, admin_id=admin_id)
+        try:
+            await callback.message.edit_text(msg, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+        return
+
+    await callback.answer()
+    name = user_info.get("name", "Nomsiz")
+    uname = f"@{user_info.get('username')}" if user_info.get("username") else "mavjud emas"
+    added_at = user_info.get("added_at", "-")
+    last_act = user_info.get("last_active") or added_at
+
+    confirm_txt = (
+        "⚠️ <b>FOYDALANUVCHINI BOTDAN O'CHIRISH</b>\n\n"
+        f"👤 <b>Ismi:</b> {name}\n"
+        f"🔗 <b>Username:</b> {uname}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{target_id}</code>\n"
+        f"📅 <b>Qo'shilgan sana:</b> {added_at}\n"
+        f"⚡️ <b>Oxirgi faolligi:</b> {last_act}\n\n"
+        "❓ <b>Haqiqatdan ham ushbu foydalanuvchini botdan o'chirib, uning ruxsatini bekor qilmoqchimisiz?</b>\n\n"
+        "<i>Eslatma: O'chirilgandan so'ng ushbu foydalanuvchi bot xizmatlaridan foydalana olmaydi.</i>"
+    )
+
+    confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔴 Ha, botdan o'chirilsin", callback_data=f"adm:confirm_del:{target_id}")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Bekor qilish", callback_data="adm:list_users:0")
+        ]
+    ])
+
+    try:
+        await callback.message.edit_text(confirm_txt, parse_mode="HTML", reply_markup=confirm_kb)
+    except Exception:
+        await callback.message.answer(confirm_txt, parse_mode="HTML", reply_markup=confirm_kb)
+
+
+@router.callback_query(F.data.startswith("adm:confirm_del:"))
+async def handle_confirm_del(callback: CallbackQuery):
+    """Foydalanuvchini botdan yakuniy o'chirish callbacki"""
+    admin_id = callback.from_user.id
+    if not access_guard.is_admin(admin_id):
+        await callback.answer("🔒 Faqat adminlar uchun!", show_alert=True)
+        return
+
+    target_id_str = callback.data.split(":")[2]
+    target_id = int(target_id_str) if target_id_str.isdigit() else 0
+
+    if target_id == admin_id:
+        await callback.answer("⚠️ O'zingizni o'chira olmaysiz!", show_alert=True)
+        return
+
+    if target_id in ADMIN_IDS:
+        await callback.answer("⚠️ Asosiy bosh administratorni o'chirib bo'lmaydi!", show_alert=True)
+        return
+
+    user_info = access_guard.get_user_info(target_id)
+    target_name = user_info.get("name", f"ID_{target_id}") if user_info else f"ID_{target_id}"
+
+    success = access_guard.remove_user(target_id)
+    if not success:
+        await callback.answer("ℹ️ Foydalanuvchi topilmadi yoki allaqachon o'chirilgan.", show_alert=True)
     else:
-        await event.answer(msg, parse_mode="HTML")
+        await callback.answer("✅ Foydalanuvchi muvaffaqiyatli o'chirildi!", show_alert=True)
+
+    # Foydalanuvchiga bildirishnoma yuborish
+    try:
+        await callback.bot.send_message(
+            chat_id=target_id,
+            text=(
+                "🚫 <b>DIQQAT!</b>\n\n"
+                "Administrator tomonidan sizning ushbu botdan foydalanish huquqingiz bekor qilindi (botdan o'chirildingiz).\n\n"
+                "Savollar bo'lsa, administrator bilan bog'lanishingiz mumkin."
+            ),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.info(f"O'chirilgan foydalanuvchiga ({target_id}) xabar jo'natilmadi: {e}")
+
+    result_txt = (
+        "✅ <b>FOYDALANUVCHI BOTDAN O'CHIRILDI!</b>\n\n"
+        f"👤 <b>Ismi:</b> {target_name}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{target_id}</code>\n"
+        f"👑 <b>O'chirgan admin:</b> {callback.from_user.full_name}\n\n"
+        "Ushbu foydalanuvchining botdan foydalanish ruxsati to'liq bekor qilindi."
+    )
+
+    result_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Foydalanuvchilar ro'yxati", callback_data="adm:list_users:0")],
+        [InlineKeyboardButton(text="🛡 Admin panel", callback_data="adm:panel")]
+    ])
+
+    try:
+        await callback.message.edit_text(result_txt, parse_mode="HTML", reply_markup=result_kb)
+    except Exception:
+        await callback.message.answer(result_txt, parse_mode="HTML", reply_markup=result_kb)
 
 
 @router.callback_query(F.data == "adm:help_add")
@@ -4213,9 +4462,9 @@ async def handle_adm_help_remove(callback: CallbackQuery):
     await callback.answer()
     await callback.message.answer(
         "➖ <b>Foydalanuvchini o'chirish yo'riqnomasi:</b>\n\n"
-        "Foydalanuvchining ruxsatini bekor qilish uchun quyidagi buyruqni yuboring:\n"
-        "<code>/remove_user &lt;TELEGRAM_ID&gt;</code>\n\n"
-        "Misol: <code>/remove_user 123456789</code>",
+        "1️⃣ <b>Tugma orqali:</b> <code>/users</code> buyrug'ini yuboring va kerakli user tagidagi <b>«🗑 O'chirish»</b> tugmasini bosing.\n"
+        "2️⃣ <b>Buyruq orqali:</b> <code>/delete_user &lt;TELEGRAM_ID&gt;</code> buyrug'ini yuboring.\n\n"
+        "Misol: <code>/delete_user 123456789</code>",
         parse_mode="HTML"
     )
 
@@ -4347,27 +4596,63 @@ async def handle_add_user_cmd(message: Message):
 
 
 @router.message(Command("remove_user"))
+@router.message(Command("delete_user"))
+@router.message(Command("udalit_user"))
+@router.message(Command("kick_user"))
 async def handle_remove_user_cmd(message: Message):
-    """Admin user ruxsatini bekor qilishi: /remove_user <id>"""
-    if not access_guard.is_admin(message.from_user.id):
+    """Admin user ruxsatini bekor qilishi / botdan o'chirishi"""
+    admin_id = message.from_user.id
+    if not access_guard.is_admin(admin_id):
         await message.reply("🔒 Faqat adminlar uchun!")
         return
 
     parts = message.text.split(maxsplit=1)
-    if len(parts) < 2 or not parts[1].isdigit():
-        await message.reply(
-            "⚠️ <b>Noto'g'ri format!</b>\n"
-            "Format: <code>/remove_user &lt;TELEGRAM_ID&gt;</code>\n"
-            "Misol: <code>/remove_user 123456789</code>",
-            parse_mode="HTML"
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        msg, kb = render_users_list(page=0, select_delete=True, admin_id=admin_id)
+        instruction = (
+            "⚠️ <b>Foydalanuvchini botdan o'chirish:</b>\n"
+            "Quyidagi ro'yxatdan o'chirmoqchi bo'lgan foydalanuvchini tanlang yoki buyruq bilan ID raqam yuboring:\n"
+            "<code>/delete_user &lt;TELEGRAM_ID&gt;</code>\n\n"
         )
+        await message.reply(instruction + msg, parse_mode="HTML", reply_markup=kb)
         return
 
-    target_id = int(parts[1])
+    target_id = int(parts[1].strip())
+    if target_id == admin_id:
+        await message.reply("⚠️ <b>O'zingizni o'chira olmaysiz!</b>", parse_mode="HTML")
+        return
+
+    if target_id in ADMIN_IDS:
+        await message.reply("⚠️ <b>Asosiy bosh administratorni o'chirib bo'lmaydi!</b>", parse_mode="HTML")
+        return
+
+    user_info = access_guard.get_user_info(target_id)
+    target_name = user_info.get("name", f"ID_{target_id}") if user_info else f"ID_{target_id}"
+
     if access_guard.remove_user(target_id):
+        # Foydalanuvchiga bildirishnoma yuborish
+        try:
+            await message.bot.send_message(
+                chat_id=target_id,
+                text=(
+                    "🚫 <b>DIQQAT!</b>\n\n"
+                    "Administrator tomonidan sizning ushbu botdan foydalanish huquqingiz bekor qilindi (botdan o'chirildingiz).\n\n"
+                    "Savollar bo'lsa, administrator bilan bog'lanishingiz mumkin."
+                ),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.info(f"O'chirilgan foydalanuvchiga ({target_id}) xabar yetkazilmadi: {e}")
+
         await message.reply(
-            f"✅ Foydalanuvchi (ID: <code>{target_id}</code>) ro'yxatdan o'chirildi va ruxsati bekor qilindi.",
-            parse_mode="HTML"
+            f"✅ <b>Foydalanuvchi muvaffaqiyatli o'chirildi!</b>\n\n"
+            f"👤 <b>Ism:</b> {target_name}\n"
+            f"🆔 <b>ID:</b> <code>{target_id}</code>\n"
+            f"Ushbu foydalanuvchining botdan foydalanish huquqi to'liq bekor qilindi.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👥 Foydalanuvchilar ro'yxati", callback_data="adm:list_users:0")]
+            ])
         )
     else:
         await message.reply(
