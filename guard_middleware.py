@@ -39,9 +39,34 @@ class GuardMiddleware(BaseMiddleware):
 
         user_id = user.id
 
-        # 1. Agar foydalanuvchiga ruxsat berilgan bo'lsa -> faollikni yangilash va davom etish
+        # Foydalanuvchi faolligini har doim qayd qilish (admin monitoringi uchun)
+        access_guard.touch_user(user_id, name=user.full_name, username=user.username or "")
+
+        # 1. Foydalanuvchi BLOKLANGANMI (foydalanishi cheklanganmi)?
+        if access_guard.is_user_blocked(user_id):
+            b_info = access_guard.data.get("blocked_users", {}).get(str(user_id), {})
+            reason = b_info.get("reason", "Administrator tomonidan belgilangan cheklov")
+            blocked_date = b_info.get("blocked_at", "")
+
+            blocked_msg = (
+                "🚫 <b>SIZNING BOTDAN FOYDALANISHINGIZ CHEKLANGAN!</b>\n\n"
+                "Administrator qaroriga binoan sizning ushbu bot xizmatlaridan foydalanish imkoniyatingiz to'xtatilgan (bloklangan).\n\n"
+                f"👤 <b>Foydalanuvchi:</b> {user.full_name}\n"
+                f"🆔 <b>Telegram ID:</b> <code>{user_id}</code>\n"
+                f"📝 <b>Sabab:</b> {reason}\n"
+            )
+            if blocked_date:
+                blocked_msg += f"📅 <b>Cheklangan sana:</b> {blocked_date}\n"
+            blocked_msg += "\n<i>Savollar bo'lsa, bot administratoriga murojaat qilishingiz mumkin.</i>"
+
+            if isinstance(event, Message):
+                await event.reply(blocked_msg, parse_mode="HTML")
+            elif isinstance(event, CallbackQuery):
+                await event.answer("🚫 Sizning botdan foydalanishingiz cheklangan!", show_alert=True)
+            return
+
+        # 2. Agar foydalanuvchiga ruxsat berilgan bo'lsa -> davom etish
         if access_guard.is_user_allowed(user_id):
-            access_guard.touch_user(user_id, name=user.full_name, username=user.username or "")
             return await handler(event, data)
 
         # 2. Ruxsati yo'q bo'lsa:

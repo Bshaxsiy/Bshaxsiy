@@ -1,11 +1,12 @@
 @echo off
 chcp 65001 >nul
+cd /d "%~dp0"
 echo ======================================================
-echo 🛑 Telegram Botni To'xtatish
+echo [Telegram Bot] To'xtatish
 echo ======================================================
 echo.
-powershell -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Host 'Jarayon to''xtatildi PID:' $_.ProcessId }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*main.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Host ('Jarayon to''xtatildi PID: ' + $_.ProcessId) }"
 echo.
-echo ✅ Bot muvaffaqiyatli to'xtatildi.
+echo [OK] Bot muvaffaqiyatli to'xtatildi.
 echo.
 pause

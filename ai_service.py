@@ -9,6 +9,8 @@ from google import genai
 from google.genai import types
 
 import config
+from content_safety import check_content_safety, get_safety_refusal_message, SafetyViolation
+from legal_factcheck import enrich_legal_response, is_legal_query
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +22,53 @@ FALLBACK_MODELS = [
     "gemini-3.8-flash",
 ]
 
+# Standart xavfsizlik sozlamalari (xavfli kontent, nafrat va tahqirlashlarni bloklash)
+DEFAULT_SAFETY_SETTINGS = [
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+    ),
+]
+
 SYSTEM_PROMPT = (
-    "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz.\n"
+    "Siz Telegram bot ichida ishlovchi o'ta aqlli, foydali va xushmuomala sun'iy intellekt yordamchisisiz.\n\n"
+    "QAT'IY XAVFSIZLIK VA MAVZU TAQIQLARI (SAFETY & STRICT PROHIBITIONS):\n"
+    "1. DINIY MAVZULAR VA SAVOLLAR QAT'IYAN TAQIQLANGAN:\n"
+    "   - Hech qanday diniy masalalar, shariat ahkomlari, fatvolar, aqidaviy talqinlar, ibodat tartiblari (namoz, ro'za, tahorat, haj, zakot va b.), halol-harom, gunoh-savob, mazhabiy bahslar yoki e'tiqodiy savollarga javob bermang.\n"
+    "   - Agar foydalanuvchi diniy savol bersa, muloyimlik bilan bot diniy masalalarda vakolatli emasligini va bunday savollarga javob berish qat'iyan taqiqlanganini bildiring hamda rasmiy vakolatli manbalarga (O'zbekiston musulmonlari idorasi: fatvo.uz yoki muslim.uz) murojaat qilishni tavsiya qiling.\n"
+    "2. TERRORIZM, EKSTREMIZM VA ZO'RAVONLIK QAT'IYAN TAQIQLANGAN:\n"
+    "   - Terrorizm, ekstremizm, radikalizm, qurol yoki portlovchi moddalar tayyorlash, terrorchilik tashkilotlari (ISHID, Al-Qoida va h.k.), zo'ravonlik, odam o'ldirish yoki noqonuniy qo'poruvchilik harakatlariga oid har qanday so'rovlarga javob berish QAT'IYAN MAN ETILADI.\n"
+    "   - Bunday so'rovlarga zudlik bilan qat'iy rad javobini bering.\n\n"
     "QAT'IY TIL VA IMLO TALABLARI (LANGUAGE PURITY & GRAMMAR):\n"
     "1. Foydalanuvchi yoki vazifa qaysi tilni talab qilsa (o'zbek, rus, ingliz), butun javobni 100% FAQAT VA FAQAT O'SHA TILDA bering.\n"
     "2. TILLARNI ARALASHTIRISH QAT'IYAN MAN ETILADI: Agar so'rov rus tilida bo'lsa, birorta ham o'zbekcha so'z yoki qo'shimcha ishlatmang, barcha terminlarni to'liq rus tiliga tarjima qiling. Agar o'zbek tilida bo'lsa, ruscha yoki inglizcha so'zlarni aralashtirmang.\n"
     "3. Imlo va grammatika qoidalariga 100% rioya qiling: barcha so'zlar va ularning grammatik qo'shimchalarini (-da, -dan, -ga, -ni, -ning, -lar, -dagi) aslo tushirib qoldirmasdan, to'liq yozing.\n"
     "4. Rus tilida: соблюдайте строгие правила русской орфографии, пунктуации и падежных окончаний, избегайте опечаток и калек.\n"
-    "5. Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang."
+    "5. Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang.\n\n"
+    "QONUNCHILIK VA HUQUQIY FACT-CHECKING TALABI (LEGAL FACT-CHECKING & OFFICIAL SOURCES):\n"
+    "1. Agar foydalanuvchi so'rovi qonunchilik, huquqiy masalalar, kodekslar, qonunlar, qarorlar, farmonlar, moddalar, sud, jarimalar, mehnat/fuqarolik/soliq/oila huquqi yoki yuridik normalarga oid bo'lsa:\n"
+    "   - FACT-CHECKING O'TKAZING: Javobni O'zbekiston Respublikasining amaldagi qonunchiligi (tegishli Kodeks, Qonun, Qaror, Farmon) va aniq moddalari/bandlariga asoslang.\n"
+    "   - FAQAT MANBANI KO'RSATING: Qaysi qonunchilik hujjatidan (Kodeks yoki Qonun nomi, moddasi, bandi) olinganini aniq yozing. Masalan: 'O'zbekiston Respublikasi Mehnat kodeksining 161-moddasiga muvofiq...' yoki 'Huquqiy manba: O'zbekiston Respublikasi Fuqarolik kodeksi, 354-modda'.\n"
+    "   - HAVOLALAR (URL/LINKLAR) TAQIQLANADI: Javobda hech qanday sayt havolasi, URL yoki web-link (jumladan lex.uz yoki norma.uz havolalari) ko'rsatilmasin! Faqatgina rasmiy manbaning o'zini matn shaklida ko'rsating.\n"
 )
 
 DEEP_RESEARCH_PROMPT = (
     "Siz xalqaro darajadagi bosh ilmiy va tahliliy izlanuvchisiz. "
     "Mavzu yoki savol bo'yicha eng yuqori darajada chuqur, mukammal, faktlarga asoslangan va tizimli hisobot tayyorlang.\n"
+    "QAT'IY TAQIQ: Diniy masalalar, shariat hukmlari, fatvolar hamda terrorizm, ekstremizm, zo'ravonlik yoki qurol/portlovchi moddalarga oid tadqiqotlar o'tkazish QAT'IYAN TAQIQLANADI! Bunday mavzularda hisobot tayyorlamang va qat'iy rad javobini bering.\n"
+    "HUQUQIY FACT-CHECKING: Agar tadqiqot mavzusi qonunchilik yoki huquqiy sohalarga tegishli bo'lsa, O'zbekiston Respublikasining amaldagi qonunchilik hujjatlari bo'yicha aniq qonun nomi, modda va me'yorlar bilan fact-checking qiling. Hech qanday sayt havolalari (lex.uz, norma.uz va b. URL linklar) kiritilmasin, faqat rasmiy manba nomi matn ko'rinishida ko'rsatilsin.\n"
     "Qat'iy ravishda sof adabiy o'zbek tilida, imlo va grammatika qoidalariga rioya qilib, har bir so'z va qo'shimchani to'liq bayon qiling.\n"
     "Hisobot tuzilishi:\n"
     "1. 📌 Kirish va Mavzuning Dolzarbligi\n"
@@ -100,6 +136,7 @@ class AIService:
                     chat_config = types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
                         temperature=0.7,
+                        safety_settings=DEFAULT_SAFETY_SETTINGS,
                     )
                     chat = self._client.aio.chats.create(
                         model=model,
@@ -115,6 +152,7 @@ class AIService:
             chat_config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.7,
+                safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
             chat = self._client.aio.chats.create(
                 model=target_model,
@@ -145,6 +183,12 @@ class AIService:
             self._init_client()
         if not self._client:
             return "❌ AI mijozi bilan bog'lanishda xatolik."
+
+        # Xavfsizlik sozlamalarini ta'minlash
+        if config and not getattr(config, "safety_settings", None):
+            config.safety_settings = DEFAULT_SAFETY_SETTINGS
+        elif not config:
+            config = types.GenerateContentConfig(safety_settings=DEFAULT_SAFETY_SETTINGS)
 
         candidates = self._get_candidate_models()
         last_error = ""
@@ -191,11 +235,18 @@ class AIService:
         user_id: int,
         prompt: str,
         image_bytes: Optional[bytes] = None,
-        mime_type: str = "image/jpeg"
+        mime_type: str = "image/jpeg",
+        lang: str = "uz"
     ) -> str:
         """
         Gemini AI ga savol/xabar yuborish va javob olish (zaxira modellar bilan)
         """
+        # Kontent xavfsizligi tekshiruvi (diniy va terrorizm/ekstremizm taqiqlari)
+        violation, reason = check_content_safety(prompt)
+        if violation != SafetyViolation.NONE:
+            logger.warning(f"ask_gemini: xavfsizlik filtri ishga tushdi ({reason}) - user_id={user_id}")
+            return get_safety_refusal_message(violation, lang=lang)
+
         if not self.is_configured():
             return (
                 "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
@@ -223,7 +274,8 @@ class AIService:
                 response = await asyncio.wait_for(task, timeout=45.0)
 
                 if response and response.text:
-                    return response.text
+                    enriched, _, _ = enrich_legal_response(response.text, query=prompt, lang=lang)
+                    return enriched
                 return "Javob olinmadi. Iltimos, savolingizni boshqacharoq shaklda berib ko'ring."
             except asyncio.TimeoutError:
                 last_error = f"{model_name} timeout"
@@ -255,11 +307,18 @@ class AIService:
         user_id: int,
         audio_bytes: bytes,
         mime_type: str = "audio/ogg",
-        prompt: Optional[str] = None
+        prompt: Optional[str] = None,
+        lang: str = "uz"
     ) -> str:
         """
         Audio xabarni Gemini AI ga yuborish va tahlil/javob olish (zaxira modellar bilan)
         """
+        if prompt:
+            violation, reason = check_content_safety(prompt)
+            if violation != SafetyViolation.NONE:
+                logger.warning(f"ask_gemini_audio: xavfsizlik filtri ishga tushdi ({reason}) - user_id={user_id}")
+                return get_safety_refusal_message(violation, lang=lang)
+
         if not self.is_configured():
             return (
                 "⚠️ <b>Gemini API kaliti kiritilmagan!</b>\n\n"
@@ -276,7 +335,8 @@ class AIService:
             "3. Javobni sof, adabiy o'zbek tilida, imlo va grammatika qoidalariga 100% rioya qilib bering.\n"
             "4. So'z oxiridagi barcha qo'shimchalar (-da, -dan, -ga, -ni, -ning, -lar, -dagi) to'liq va xatosiz yozilsin, harflar tushib qolmasin.\n"
             "5. Javobda hech qanday keraksiz inglizcha so'z yoki jargon ishlatmang.\n"
-            "6. Agar foydalanuvchi murojaat yoki fikr bildirgan bo'lsa, xabar mazmunini to'liq ifodalab, ravon tahliliy xulosa bering."
+            "6. Agar foydalanuvchi murojaat yoki fikr bildirgan bo'lsa, xabar mazmunini to'liq ifodalab, ravon tahliliy xulosa bering.\n"
+            "7. QAT'IY XAVFSIZLIK VA MAVZU CHEKLOVI: Agar audio xabarda diniy masalalar, shariat ahkomlari, fatvolar, aqidaviy talqinlar yoki terrorizm, ekstremizm, zo'ravonlik, qurol/portlovchi moddalar yasashga oid savol yoki topshiriq bo'lsa, ularga javob berish QAT'IYAN TAQIQLANADI. Bunday hollarda qat'iy rad javobini bering."
         )
 
         candidates = self._get_candidate_models()
@@ -293,7 +353,11 @@ class AIService:
                 response = await asyncio.wait_for(task, timeout=50.0)
 
                 if response and response.text:
-                    return response.text
+                    resp_violation, _ = check_content_safety(response.text)
+                    if resp_violation != SafetyViolation.NONE:
+                        return get_safety_refusal_message(resp_violation, lang=lang)
+                    enriched, _, _ = enrich_legal_response(response.text, query=prompt or "", lang=lang)
+                    return enriched
                 return "Audio xabarni tahlil qilishda javob matni olinmadi."
             except asyncio.TimeoutError:
                 last_error = f"{model_name} timeout"
@@ -356,6 +420,12 @@ class AIService:
         """
         Mavzu bo'yicha chuqur tahlil (Deep Research) o'tkazish
         """
+        # Kontent xavfsizligi tekshiruvi (diniy va terrorizm/ekstremizm taqiqlari)
+        violation, reason = check_content_safety(query)
+        if violation != SafetyViolation.NONE:
+            logger.warning(f"deep_research: xavfsizlik filtri ishga tushdi ({reason}) - user_id={user_id}")
+            return get_safety_refusal_message(violation, lang=lang)
+
         lang_instruction = (
             "Hisobotni 100% SOF ADABIY O'ZBEK TILIDA, imlo va grammatika qoidalariga rioya qilib tayyorlang."
             if lang == "uz" else
@@ -365,15 +435,18 @@ class AIService:
         )
         cfg = types.GenerateContentConfig(
             system_instruction=f"{DEEP_RESEARCH_PROMPT}\n\n{lang_instruction}",
-            temperature=0.4
+            temperature=0.4,
+            safety_settings=DEFAULT_SAFETY_SETTINGS
         )
         prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
-        return await self.generate_content_with_fallback(
+        report = await self.generate_content_with_fallback(
             contents=prompt,
             config=cfg,
             timeout=60.0,
             operation_name=f"Deep Research ({query[:30]})"
         )
+        enriched, _, _ = enrich_legal_response(report, query=query, lang=lang)
+        return enriched
 
     async def detect_document_sections(self, doc_text: str, filename: str, lang: str = "uz") -> List[str]:
         """

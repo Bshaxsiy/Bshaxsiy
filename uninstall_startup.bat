@@ -1,9 +1,10 @@
 @echo off
 chcp 65001 >nul
+cd /d "%~dp0"
 echo ======================================================
-echo 🗑 Windows Startup (Avtomatik Ishga Tushish) ni O'chirish
+echo [Telegram Bot] Windows Startup ni O'chirish
 echo ======================================================
 echo.
-powershell -Command "$target = \"$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\BshaxsiyBot.vbs\"; if (Test-Path $target) { Remove-Item $target -Force; Write-Host 'Avtomatik ishga tushish o''chirildi.' } else { Write-Host 'Fayl topilmadi.' }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$startupPath = [IO.Path]::Combine($env:APPDATA, 'Microsoft\Windows\Start Menu\Programs\Startup\BshaxsiyBot.vbs'); if (Test-Path $startupPath) { Remove-Item $startupPath -Force; Write-Host '[OK] Avtomatik ishga tushish o''chirildi.' } else { Write-Host '[INFO] Startup fayli topilmadi.' }"
 echo.
 pause

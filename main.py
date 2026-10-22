@@ -10,13 +10,22 @@ from config import BOT_TOKEN
 from handlers import router
 from guard_middleware import GuardMiddleware
 
-# Logging sozlamalari
-log_handlers = []
-if sys.stdout is not None:
+import os
+from config import BASE_DIR
+
+# Agar pythonw (orqa fon / GUI) rejimida ishlayotgan bo'lsa, stderr va stdout ni xavfsiz yo'naltirish
+is_gui = "pythonw" in sys.executable.lower() or sys.stdout is None
+if is_gui:
+    try:
+        sys.stderr = open(BASE_DIR / "bot_error.log", "a", encoding="utf-8")
+    except Exception:
+        pass
+
+log_handlers = [
+    logging.FileHandler(BASE_DIR / "bot.log", encoding="utf-8")
+]
+if not is_gui and sys.stdout is not None:
     log_handlers.append(logging.StreamHandler(sys.stdout))
-else:
-    from config import BASE_DIR
-    log_handlers.append(logging.FileHandler(BASE_DIR / "bot.log", encoding="utf-8"))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,3 +75,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot foydalanuvchi tomonidan to'xtatildi.")
+    except Exception:
+        logger.exception("Botda kutilmagan xatolik yuz berdi:")
