@@ -48,11 +48,23 @@ def _flat(text: str) -> str:
     return _norm(text).replace("'", "")
 
 
+# So'z oxiridagi qo'shimchalar (uzunroqlari avval): so'rovdagi "xatiga" va matndagi "xati/xatini" mos kelishi uchun
+_SUFFIXES = ("laridan", "larning", "larini", "lariga", "larida", "ining", "lardan", "larga", "larni", "ning",
+             "ini", "iga", "ida", "idan", "lar", "ga", "da", "ni", "dan", "si", "ri", "i")
+
+
+def _strip_suffix(w: str) -> str:
+    for suf in _SUFFIXES:
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            return w[: -len(suf)]
+    return w
+
+
 def _stems(text: str) -> List[str]:
     seen, out = set(), []
     for w in _WORD_RE.findall(_flat(text)):
         if len(w) >= 4:
-            s = w[:6]
+            s = _strip_suffix(w)[:6]
             if s not in seen:
                 seen.add(s)
                 out.append(s)
@@ -150,6 +162,9 @@ def _split_articles(act: Act, text: str) -> None:
 
     for line in text.splitlines():
         if ANNEX_RE.match(line):
+            if in_annex:
+                annex_lines.append(line)
+                continue
             flush()
             current_num, current_title, buf = None, "", []
             in_annex = True
