@@ -1138,7 +1138,7 @@ class AIService:
                 "   • HOLATNING BAYONI (Faktlar va xronologiya):\n"
                 "     Kelishuv, qarz tilxati yoki shartnoma qachon tuzilgan, kim qanday majburiyat olgan, javobgar qaysi majburiyatini buzgan, qancha to'lov qilinmagan, qancha muddat o'tgan.\n\n"
                 "   • HUQUQIY VA QONUNIY ASOSLAR (Kodeks moddalari):\n"
-                "     O'zbekiston Respublikasi Fuqarolik kodeksining (FK) tegishli moddalari (masalan, 236, 237, 324, 325, 327, 333, 382, 732-739-moddalar), Fuqarolik protsessual kodeksining (FPK) 188, 189, 190, 191-moddalari (yoki Iqtisodiy protsessual kodeksining tegishli moddalari).\n\n"
+                "     O'zbekiston Respublikasi Fuqarolik kodeksining (FK) tegishli moddalari (masalan, 236, 237, 324, 325, 327, 333, 382, 732-739-moddalar), Fuqarolik protsessual kodeksining (FPK) 188, 189, 190, 191-moddalari (iqtisodiy sudga murojaat qilinsa — Iqtisodiy protsessual kodeksining 149, 150, 151-moddalari).\n\n"
                 "   • SUDGACHA HAL QILISH TARTIBIGA RIOYA QILINGANLIGI:\n"
                 "     Javobgarga talabnoma (pretenziya) yuborilganligi va unga javob berilmagani yoki rad etilgani haqida yozish.\n\n"
                 "   • TALAB VA ILTIMOS (SO'RAYMAN: yoki TALAB QILAMAN: — bandma-band):\n"
