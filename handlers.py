@@ -1106,6 +1106,16 @@ def save_gemini_key_to_env(key: str):
     env_path.write_text(content, encoding="utf-8")
 
 
+def _to_telegram_markdown(text: str) -> str:
+    """Gemini matnidagi **qalin**, ### sarlavha va <b>/<i> teglarini Telegram Markdown (legacy) ko'rinishiga o'tkazadi,
+    aks holda ular xabarda xom belgi sifatida ko'rinib qoladi."""
+    t = re.sub(r"<b>(.*?)</b>", r"*\1*", text, flags=re.DOTALL)
+    t = re.sub(r"<i>(.*?)</i>", r"_\1_", t, flags=re.DOTALL)
+    t = re.sub(r"\*\*(.+?)\*\*", r"*\1*", t, flags=re.DOTALL)
+    t = re.sub(r"^\s*#{1,6}\s*(.+?)\s*$", r"*\1*", t, flags=re.MULTILINE)
+    return t
+
+
 async def send_ai_response(
     message: Message,
     response_text: str,
@@ -1132,7 +1142,7 @@ async def send_ai_response(
         is_last = (idx == len(chunks) - 1)
         current_markup = markup if is_last else None
         try:
-            await message.answer(chunk, parse_mode="Markdown", reply_markup=current_markup)
+            await message.answer(_to_telegram_markdown(chunk), parse_mode="Markdown", reply_markup=current_markup)
         except TelegramBadRequest:
             try:
                 await message.answer(chunk, parse_mode="HTML", reply_markup=current_markup)
