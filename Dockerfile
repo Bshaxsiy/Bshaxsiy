@@ -16,4 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Koddagi modda havolalari laws/ kutubxonasida mavjudligini tekshirish: topilmasa build to'xtaydi
+RUN python check_citations.py ai_service.py legal_factcheck.py document_service.py
+
 CMD ["python", "main.py"]
