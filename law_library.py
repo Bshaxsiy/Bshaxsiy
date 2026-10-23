@@ -31,6 +31,8 @@ _STOP = {
 
 # "85-modda. Sarlavha" yoki "85-1-modda." (lotin va kirill)
 ARTICLE_RE = re.compile(r"^\s*(\d{1,4}(?:-\d{1,2})?)-(?:modda|модда)\b[\.\s:]*(.*)$", re.IGNORECASE)
+ANNEX_RE = re.compile(r"^\s*(?:\d+\s*-\s*)?(?:ilova|илова|приложение)\s*$", re.IGNORECASE)
+ANNEX_CHUNK = 1500
 CITATION_RE = re.compile(r"(\d{1,4}(?:-\d{1,2})?)\s*-\s*(?:modda|moddasi|moddaga|moddada|moddani|moddalar)", re.IGNORECASE)
 
 _APOS = str.maketrans({"ʻ": "'", "ʼ": "'", "’": "'", "‘": "'", "`": "'", "´": "'"})
@@ -127,7 +129,35 @@ def _split_articles(act: Act, text: str) -> None:
         if current_num is not None and (body or current_title):
             act.articles.append(Article(act.key, current_num, current_title.strip(), body))
 
+    annex_n = 0
+    in_annex = False
+    annex_lines: List[str] = []
+
+    def flush_annex():
+        # Ilova (jadval, stavkalar) modda emas: raqamsiz bo'laklarga bo'lamiz
+        nonlocal annex_n
+        chunk, size = [], 0
+        for para in [p.strip() for p in annex_lines if p.strip()]:
+            chunk.append(para)
+            size += len(para)
+            if size >= ANNEX_CHUNK:
+                annex_n += 1
+                act.articles.append(Article(act.key, None, "Ilova — " + act.title + " (stavkalar, miqdorlar, jadval), " + str(annex_n) + "-bo'lak", "\n".join(chunk)))
+                chunk, size = [], 0
+        if chunk:
+            annex_n += 1
+            act.articles.append(Article(act.key, None, "Ilova — " + act.title + " (stavkalar, miqdorlar, jadval), " + str(annex_n) + "-bo'lak", "\n".join(chunk)))
+
     for line in text.splitlines():
+        if ANNEX_RE.match(line):
+            flush()
+            current_num, current_title, buf = None, "", []
+            in_annex = True
+            annex_lines = []
+            continue
+        if in_annex:
+            annex_lines.append(line)
+            continue
         m = ARTICLE_RE.match(line)
         if m:
             flush()
@@ -136,7 +166,10 @@ def _split_articles(act: Act, text: str) -> None:
             buf = []
         else:
             buf.append(line)
-    flush()
+    if in_annex:
+        flush_annex()
+    else:
+        flush()
 
     if not act.articles:
         # Moddalarga bo'linmagan hujjat: bo'laklarga ajratamiz
