@@ -1,1 +1,220 @@
-{}
+{
+  "mehnat_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Mehnat kodeksi",
+    "aliases": [
+      "mehnat kodeks",
+      "трудов"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-798, 28.10.2022"
+  },
+  "fuqarolik_kodeksi_1_qism.txt": {
+    "title": "O'zbekiston Respublikasi Fuqarolik kodeksi (birinchi qism)",
+    "aliases": [
+      "fuqarolik kodeks",
+      "fk ",
+      "fk,"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 21.12.1995"
+  },
+  "fuqarolik_kodeksi_2_qism.txt": {
+    "title": "O'zbekiston Respublikasi Fuqarolik kodeksi (ikkinchi qism)",
+    "aliases": [
+      "fuqarolik kodeks",
+      "fk ",
+      "fk,"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 29.08.1996"
+  },
+  "fuqarolik_protsessual_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Fuqarolik protsessual kodeksi",
+    "aliases": [
+      "fuqarolik protsessual",
+      "fuqarolik prosessual",
+      "fuqarolik prosesual",
+      "fpk"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 22.01.2018"
+  },
+  "iqtisodiy_protsessual_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Iqtisodiy protsessual kodeksi",
+    "aliases": [
+      "iqtisodiy protsessual",
+      "iqtisodiy prosessual",
+      "iqtisodiy prosesual",
+      "ipk"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 24.01.2018"
+  },
+  "jinoyat_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Jinoyat kodeksi",
+    "aliases": [
+      "jinoyat kodeks"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 22.09.1994"
+  },
+  "jinoyat_protsessual_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Jinoyat-protsessual kodeksi",
+    "aliases": [
+      "jinoyat-protsessual",
+      "jinoyat protsessual",
+      "jinoyat prosessual",
+      "jpk"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 22.09.1994"
+  },
+  "soliq_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Soliq kodeksi",
+    "aliases": [
+      "soliq kodeks"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 30.12.2019"
+  },
+  "oila_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Oila kodeksi",
+    "aliases": [
+      "oila kodeks"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 30.04.1998"
+  },
+  "yer_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Yer kodeksi",
+    "aliases": [
+      "yer kodeks"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 30.04.1998"
+  },
+  "byudjet_kodeksi.txt": {
+    "title": "O'zbekiston Respublikasi Byudjet kodeksi",
+    "aliases": [
+      "byudjet kodeks"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 26.12.2013"
+  },
+  "sud_hujjatlarini_ijro_etish_qonuni.txt": {
+    "title": "«Sud hujjatlari va boshqa organlar hujjatlarini ijro etish to'g'risida»gi Qonun",
+    "aliases": [
+      "ijro etish to'g'risida",
+      "sud hujjatlarini ijro",
+      "sud hujjatlari va boshqa organlar"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 258-II, 29.08.2001"
+  },
+  "notariat_qonuni.txt": {
+    "title": "«Notariat to'g'risida»gi Qonun",
+    "aliases": [
+      "notariat to'g'risida",
+      "notariat qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 343-I, 26.12.1996"
+  },
+  "advokatura_qonuni.txt": {
+    "title": "«Advokatura to'g'risida»gi Qonun",
+    "aliases": [
+      "advokatura to'g'risida",
+      "advokatura qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 349-I, 27.12.1996"
+  },
+  "prokuratura_qonuni.txt": {
+    "title": "«Prokuratura to'g'risida»gi Qonun",
+    "aliases": [
+      "prokuratura to'g'risida",
+      "prokuratura qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 257-II, 29.08.2001"
+  },
+  "mchj_qonuni.txt": {
+    "title": "«Mas'uliyati cheklangan jamiyatlar to'g'risida»gi Qonun",
+    "aliases": [
+      "mas'uliyati cheklangan",
+      "mchj"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-1137, 21.04.2026"
+  },
+  "iiv_qonuni.txt": {
+    "title": "«Ichki ishlar organlari to'g'risida»gi Qonun",
+    "aliases": [
+      "ichki ishlar organlari"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-407, 16.09.2016"
+  },
+  "murojaatlar_qonuni.txt": {
+    "title": "«Jismoniy va yuridik shaxslarning murojaatlari to'g'risida»gi Qonun",
+    "aliases": [
+      "murojaatlari to'g'risida",
+      "murojaatlar to'g'risida"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-445, 11.09.2017"
+  },
+  "banklar_qonuni.txt": {
+    "title": "«Banklar va bank faoliyati to'g'risida»gi Qonun",
+    "aliases": [
+      "banklar va bank",
+      "bank faoliyati"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-580, 05.11.2019"
+  },
+  "davlat_boji_qonuni.txt": {
+    "title": "«Davlat boji to'g'risida»gi Qonun",
+    "aliases": [
+      "davlat boji"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-600, 06.01.2020"
+  },
+  "sudlar_qonuni.txt": {
+    "title": "«Sudlar to'g'risida»gi Qonun",
+    "aliases": [
+      "sudlar to'g'risida",
+      "sudlar qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-703, 28.07.2021"
+  },
+  "tolovga_qobiliyatsizlik_qonuni.txt": {
+    "title": "«To'lovga qobiliyatsizlik to'g'risida»gi Qonun",
+    "aliases": [
+      "to'lovga qobiliyatsiz",
+      "bankrot"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-763, 12.04.2022"
+  },
+  "raqobat_qonuni.txt": {
+    "title": "«Raqobat to'g'risida»gi Qonun",
+    "aliases": [
+      "raqobat to'g'risida",
+      "raqobat qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; O'RQ-850, 03.07.2023"
+  },
+  "mahalla_qonuni.txt": {
+    "title": "«Mahalla to'g'risida»gi Qonun",
+    "aliases": [
+      "mahalla to'g'risida",
+      "mahalla qonun"
+    ],
+    "edition": "lex.uz dan 24.10.2026 da yuklangan nusxa",
+    "source": "lex.uz; 334, 13.06.2024"
+  }
+}
