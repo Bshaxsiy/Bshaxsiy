@@ -11,6 +11,7 @@ from google.genai import types
 import config
 from content_safety import check_content_safety, get_safety_refusal_message, SafetyViolation
 from legal_factcheck import enrich_legal_response, is_legal_query
+from law_library import library as law_library
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +262,11 @@ class AIService:
         candidates = self._get_candidate_models()
         last_error = ""
 
+        # Rasmiy matnlar kutubxonasi (laws/): mos modda parchalarini kontekst sifatida qo'shish
+        lib_prompt, lib_nums = prompt, set()
+        if prompt and not image_bytes and is_legal_query(prompt):
+            lib_prompt, lib_nums = law_library.augment_prompt(prompt, prompt)
+
         for model_name in candidates:
             chat = self._get_or_create_chat(user_id, model=model_name)
             if not chat:
@@ -272,13 +278,14 @@ class AIService:
                     text_content = prompt.strip() if prompt else "Ushbu rasmni ko'rib chiqib, nima aks etganini tushuntiring."
                     msg_payload = [image_part, text_content]
                 else:
-                    msg_payload = prompt
+                    msg_payload = lib_prompt
 
                 task = chat.send_message(message=msg_payload)
                 response = await asyncio.wait_for(task, timeout=45.0)
 
                 if response and response.text:
-                    enriched, _, _ = enrich_legal_response(response.text, query=prompt, lang=lang)
+                    checked_text = law_library.annotate(response.text, lib_nums, lang)
+                    enriched, _, _ = enrich_legal_response(checked_text, query=prompt, lang=lang)
                     return enriched
                 return "Javob olinmadi. Iltimos, savolingizni boshqacharoq shaklda berib ko'ring."
             except asyncio.TimeoutError:
@@ -443,12 +450,16 @@ class AIService:
             safety_settings=DEFAULT_SAFETY_SETTINGS
         )
         prompt = f"Mavzu: {query}\n\nIltimos, ushbu mavzu bo'yicha har tomonlama to'liq va professional Deep Research hisoboti tayyorlang."
+        deep_nums = set()
+        if is_legal_query(query):
+            prompt, deep_nums = law_library.augment_prompt(query, prompt)
         report = await self.generate_content_with_fallback(
             contents=prompt,
             config=cfg,
             timeout=60.0,
             operation_name=f"Deep Research ({query[:30]})"
         )
+        report = law_library.annotate(report, deep_nums, lang)
         enriched, _, _ = enrich_legal_response(report, query=query, lang=lang)
         return enriched
 
@@ -1151,6 +1162,7 @@ class AIService:
                    "2-QISM: SUDGA DA'VO ARIZASI (Fuqarolik/Iqtisodiy sudga barcha moddalar, davlat boji hisob-kitobi va ilovalar ro'yxati bilan)." if doc_type == "both" else "")
             )
 
+        prompt, _ = law_library.augment_prompt(f"{type_name} {str(details)[:6000]}", prompt)
         return await self.generate_content_with_fallback(
             contents=prompt,
             timeout=55.0,

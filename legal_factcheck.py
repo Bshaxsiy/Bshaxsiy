@@ -183,6 +183,15 @@ LEGAL_KEYWORDS = [
 ]
 
 
+def _library_loaded() -> bool:
+    """Rasmiy matnlar kutubxonasi yuklangan bo'lsa, umumiy eslatma o'rniga aniq tekshiruv ishlatiladi."""
+    try:
+        from law_library import library
+        return library.is_loaded()
+    except Exception:
+        return False
+
+
 def is_legal_query(text: str) -> bool:
     """
     Foydalanuvchi so'rovi yoki berilgan matn qonunchilik/huquqiy sohaga tegishli ekanligini aniqlash.
@@ -334,7 +343,7 @@ def enrich_legal_response(
         return cleaned_text, None, None
 
     # Modda raqami keltirilgan bo'lsa, tekshiruv eslatmasini qo'shamiz (raqamlar modeldan keladi va avtomatik tasdiqlanmaydi)
-    if re.search(r"\d+\s*-\s*(?:modda|band|qism)|\b(?:ст\.|статья|статьи|article)\s*\d+", cleaned_text, re.IGNORECASE):
+    if not _library_loaded() and re.search(r"\d+\s*-\s*(?:modda|band|qism)|\b(?:ст\.|статья|статьи|article)\s*\d+", cleaned_text, re.IGNORECASE):
         notes = {
             "uz": "⚠️ <i>Eslatma: modda raqamlari va muddatlar sun'iy intellekt tomonidan keltirilgan va avtomatik tasdiqlanmagan. Ularni lex.uz dagi amaldagi tahrir bilan tekshirib oling.</i>",
             "ru": "⚠️ <i>Примечание: номера статей и сроки приведены ИИ и не подтверждены автоматически. Сверьте их с действующей редакцией на lex.uz.</i>",
