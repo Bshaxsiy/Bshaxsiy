@@ -75,9 +75,9 @@ KNOWN_LEGAL_ACTS = [
     },
     {
         "patterns": [r"\b3757[- ]?(son|qaror|buyruq)?[a-z]*\b", r"\bijro\s+xati\s+yo'riqnomasi\b"],
-        "title_uz": "Notariuslar tomonidan ijro xatlarini yozish tartibi to'g'risidagi yo'riqnoma (Adliya vazirligi ro'yxat raqami: 3757)",
-        "title_ru": "Инструкция о порядке совершения исполнительных надписей нотариусами (№ 3757)",
-        "title_en": "Instruction on Notarial Execution Inscriptions (No. 3757)",
+        "title_uz": "Notariuslar tomonidan ijro xatlarini yozish tartibi to'g'risidagi Nizom (Adliya vazirining 2026-yil 13-yanvardagi 2-mh-sonli buyrug'i, ro'yxat raqami: 3757)",
+        "title_ru": "Положение о порядке совершения исполнительных надписей нотариусами (приказ министра юстиции № 2-мх, рег. № 3757)",
+        "title_en": "Regulation on Notarial Execution Inscriptions (Minister of Justice Order No. 2-mh, reg. No. 3757)",
         "search_term": "3757-son ijro xati"
     },
 ]
