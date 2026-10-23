@@ -333,6 +333,15 @@ def enrich_legal_response(
     if not is_legal_query(combined_for_check):
         return cleaned_text, None, None
 
+    # Modda raqami keltirilgan bo'lsa, tekshiruv eslatmasini qo'shamiz (raqamlar modeldan keladi va avtomatik tasdiqlanmaydi)
+    if re.search(r"\d+\s*-\s*(?:modda|band|qism)|\b(?:ст\.|статья|статьи|article)\s*\d+", cleaned_text, re.IGNORECASE):
+        notes = {
+            "uz": "⚠️ <i>Eslatma: modda raqamlari va muddatlar sun'iy intellekt tomonidan keltirilgan va avtomatik tasdiqlanmagan. Ularni lex.uz dagi amaldagi tahrir bilan tekshirib oling.</i>",
+            "ru": "⚠️ <i>Примечание: номера статей и сроки приведены ИИ и не подтверждены автоматически. Сверьте их с действующей редакцией на lex.uz.</i>",
+            "en": "⚠️ <i>Note: article numbers and deadlines are AI-generated and not automatically verified. Check them against the current edition on lex.uz.</i>",
+        }
+        cleaned_text = cleaned_text.rstrip() + "\n\n" + notes.get(lang, notes["uz"])
+
     # Agar matnda allaqachon huquqiy asos yoki manba keltirilgan bo'lsa, qayta manba blokini qo'shmaymiz
     has_source_heading = any(
         kw in cleaned_text.lower()

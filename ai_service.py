@@ -59,8 +59,12 @@ SYSTEM_PROMPT = (
     "5. Javoblarni chiroyli, tushunarli, tuzilmaviy formatda taqdim eting. Hech qanday ma'lumotni oxirida chala qoldirmang, xulosalarni to'liq yakunlang.\n\n"
     "QONUNCHILIK VA HUQUQIY FACT-CHECKING TALABI (LEGAL FACT-CHECKING & OFFICIAL SOURCES):\n"
     "1. Agar foydalanuvchi so'rovi qonunchilik, huquqiy masalalar, kodekslar, qonunlar, qarorlar, farmonlar, moddalar, sud, jarimalar, mehnat/fuqarolik/soliq/oila huquqi yoki yuridik normalarga oid bo'lsa:\n"
-    "   - FACT-CHECKING O'TKAZING: Javobni O'zbekiston Respublikasining amaldagi qonunchiligi (tegishli Kodeks, Qonun, Qaror, Farmon) va aniq moddalari/bandlariga asoslang.\n"
-    "   - FAQAT MANBANI KO'RSATING: Qaysi qonunchilik hujjatidan (Kodeks yoki Qonun nomi, moddasi, bandi) olinganini aniq yozing. Masalan: 'O'zbekiston Respublikasi Mehnat kodeksining 161-moddasiga muvofiq...' yoki 'Huquqiy manba: O'zbekiston Respublikasi Fuqarolik kodeksi, 354-modda'.\n"
+    "   - ASOS: Javobni O'zbekiston Respublikasining amaldagi qonunchiligiga (tegishli Kodeks, Qonun, Qaror, Farmon) asoslang.\n"
+    "   - ANIQLIK QOIDASI (ENG MUHIM): Modda, qism yoki band raqamini FAQAT unga to'liq ishonchingiz komil bo'lganda yozing. Ishonchingiz komil bo'lmasa, raqamni UYDIRMANG va TAXMIN QILMANG: faqat hujjat nomini yozing va 'modda raqamini lex.uz dagi amaldagi tahrirdan tekshiring' deb ayting.\n"
+    "   - MUDDAT, MIQDOR VA TOIFALARNI UYDIRMANG: kunlar, oylar, foizlar, summalar, istisno toifalar (masalan, 'rahbarlar uchun alohida muddat') faqat aniq bilsangiz yozilsin. Bilmasangiz, 'aniq muddat qonunchilikda belgilangan, uni amaldagi tahrirdan tekshiring' deb yozing.\n"
+    "   - TAHRIR: Mehnat kodeksi — 2022-yil 28-oktabrdagi O'RQ-798-son Qonun bilan tasdiqlangan, 2023-yil 30-aprelda kuchga kirgan yangi kodeks. 1995-yil 21-dekabrdagi eski kodeks amaldan chiqqan: eski moddalar raqami va qoidalarini ishlatmang. Boshqa hujjatlarning ham faqat amaldagi tahririga tayaning.\n"
+    "   - MANBANI KO'RSATISH: Qaysi hujjatdan olinganini yozing (Kodeks yoki Qonun nomi; raqam faqat ishonchli bo'lsa). Masalan: 'O'zbekiston Respublikasi Mehnat kodeksiga muvofiq...'. Raqamli ma'lumotlar uchun 'amaldagi tahrirni lex.uz da tekshiring' eslatmasini qo'shing.\n"
+    "   - Agar savolga qonunchilikda aniq javob topilmasa yoki sizda ishonchli ma'lumot bo'lmasa, buni ochiq ayting va taxminni qonun deb ko'rsatmang.\n"
     "   - HAVOLALAR (URL/LINKLAR) TAQIQLANADI: Javobda hech qanday sayt havolasi, URL yoki web-link (jumladan lex.uz yoki norma.uz havolalari) ko'rsatilmasin! Faqatgina rasmiy manbaning o'zini matn shaklida ko'rsating.\n"
 )
 
@@ -135,7 +139,7 @@ class AIService:
                 try:
                     chat_config = types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
-                        temperature=0.7,
+                        temperature=0.2,
                         safety_settings=DEFAULT_SAFETY_SETTINGS,
                     )
                     chat = self._client.aio.chats.create(
@@ -151,7 +155,7 @@ class AIService:
         try:
             chat_config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.7,
+                temperature=0.2,
                 safety_settings=DEFAULT_SAFETY_SETTINGS,
             )
             chat = self._client.aio.chats.create(
