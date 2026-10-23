@@ -1,14 +1,11 @@
 services:
-  - type: worker
+  - type: web
     name: bshaxsiy-telegram-bot
     runtime: docker
     region: frankfurt
-    plan: starter
+    plan: free
     autoDeploy: true
-    disk:
-      name: bot-data
-      mountPath: /app/data
-      sizeGB: 1
+    healthCheckPath: /healthz
     envVars:
       - key: BOT_TOKEN
         sync: false

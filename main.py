@@ -35,6 +35,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def start_health_server():
+    """
+    Render (Web Service) uchun port tinglovchi sodda HTTP server.
+    Faqat PORT muhit o'zgaruvchisi berilganda ishga tushadi (noutbukda ishlamaydi).
+    """
+    port = os.getenv("PORT")
+    if not port:
+        return None
+    from aiohttp import web
+
+    async def health(request):
+        return web.Response(text="OK")
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/healthz", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(port))
+    await site.start()
+    logger.info(f"Salomatlik serveri {port}-portda ishga tushdi.")
+    return runner
+
+
 async def main():
     """
     Botni ishga tushiruvchi asosiy funksiya
@@ -55,6 +79,8 @@ async def main():
     # Routerlarni ulash
     dp.include_router(router)
 
+    health_runner = await start_health_server()
+
     # Oldingi kutilayotgan yangilanishlarni tozalash (webhook o'chirish)
     await bot.delete_webhook(drop_pending_updates=True)
 
@@ -66,6 +92,8 @@ async def main():
         await dp.start_polling(bot)
     finally:
         # Bot sessiyasini yopish
+        if health_runner is not None:
+            await health_runner.cleanup()
         await bot.session.close()
         logger.info("Bot to'xtatildi.")
 
