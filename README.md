@@ -19,7 +19,7 @@ Botdan faqat ruxsat berilgan (cheklangan) foydalanuvchilar foydalanishi uchun to
      - `[❌ Rad etish]`
    - Admin ruxsat bergan zahoti, foydalanuvchiga avtomatik xabar boradi va bot ochiladi!
 3. **Admin sifatida kirish:**
-   - Botga `/admin_login <parol>` (standart parol `.env` dagi: `admin777`) yozgan foydalanuvchi darhol doimiy Administrator maqomini oladi.
+   - Botga `/admin_login <parol>` (parol faqat `.env` yoki serverning maxfiy o'zgaruvchisida saqlanadi, kodda yozilmaydi) yozgan foydalanuvchi darhol doimiy Administrator maqomini oladi.
 4. **Qo'riqchi buyruqlari:**
    - `/admin` yoki menyudagi **«🛡 Qo'riqchi (Admin)»** tugmasi — boshqaruv paneli.
    - `/users` — Ruxsat berilgan barcha foydalanuvchilar ro'yxati.
@@ -115,7 +115,7 @@ GEMINI_MODEL=gemini-3.8-flash
 
 # Qo'riqchi tizimi sozlamalari:
 ADMIN_IDS=123456789
-ADMIN_PASSWORD=admin777
+ADMIN_PASSWORD=BU_YERGA_KUCHLI_PAROL_YOZING
 ```
 
 ### 2. Kutubxonalarni O'rnatish
@@ -139,6 +139,6 @@ Noutbuk quvvati o'chirilganda ham bot to'xtamasdan ishlashi uchun [Render.com](h
    - `BOT_TOKEN`: Sizning Telegram bot tokeningiz
    - `GEMINI_API_KEY`: Google Gemini API kalitingiz
    - `GEMINI_MODEL`: `gemini-3.8-flash`
-   - `ADMIN_PASSWORD`: `admin777`
+   - `ADMIN_PASSWORD`: o'zingiz o'ylab topgan kuchli parol (GitHub'ga yozmang)
 5. **"Create Service"** tugmasini bosing.
 Bot bulutli serverda 24 soat, 7 kun, noutbukingiz o'chiq bo'lsa ham uzluksiz ishlaydi!

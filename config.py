@@ -32,5 +32,5 @@ raw_admin_ids = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = [int(i.strip()) for i in raw_admin_ids.split(",") if i.strip().isdigit()]
 
 # Admin bo'lish uchun maxfiy login parol
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin777")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
