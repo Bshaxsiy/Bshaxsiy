@@ -59,6 +59,32 @@ async def start_health_server():
     return runner
 
 
+async def keep_alive_loop():
+    """
+    Render bepul tarifida xizmat uxlab qolmasligi uchun o'z /healthz manzilini
+    har 10 daqiqada chaqirib turadi. Foydalanuvchilarga ko'rinmaydi.
+    Faqat Render (RENDER_EXTERNAL_URL mavjud bo'lsa) ishlaydi.
+    """
+    base_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not base_url:
+        return
+    import aiohttp
+
+    target = base_url.rstrip("/") + "/healthz"
+    await asyncio.sleep(60)
+    while True:
+        try:
+            timeout = aiohttp.ClientTimeout(total=20)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(target) as resp:
+                    await resp.read()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"Keep-alive so'rovi bajarilmadi: {e}")
+        await asyncio.sleep(600)
+
+
 async def main():
     """
     Botni ishga tushiruvchi asosiy funksiya
@@ -80,6 +106,7 @@ async def main():
     dp.include_router(router)
 
     health_runner = await start_health_server()
+    keep_alive_task = asyncio.create_task(keep_alive_loop())
 
     # Oldingi kutilayotgan yangilanishlarni tozalash (webhook o'chirish)
     await bot.delete_webhook(drop_pending_updates=True)
@@ -92,6 +119,7 @@ async def main():
         await dp.start_polling(bot)
     finally:
         # Bot sessiyasini yopish
+        keep_alive_task.cancel()
         if health_runner is not None:
             await health_runner.cleanup()
         await bot.session.close()
