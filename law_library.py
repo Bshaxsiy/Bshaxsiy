@@ -293,7 +293,7 @@ class LawLibrary:
         return bool(self.acts)
 
     # ---- qidiruv ----
-    def search(self, query: str, k: int = 6) -> List[Article]:
+    def search(self, query: str, k: int = 6, min_cov: Optional[float] = None) -> List[Article]:
         if not self._all or not query:
             return []
         qn = _norm(query)
@@ -394,7 +394,8 @@ class LawLibrary:
         top_sc, top_cov, _ = scored[0]
         # Eng yaxshi moddada ham so'rovning mazmunli qismi topilmagan bo'lsa — to'qima javob bermaslik uchun bo'sh qaytaramiz
         # (uzun so'rovlarda — hujjat tayyorlash matnida — ism-familiya, manzil kabi so'zlar ko'p bo'lgani uchun bu qoida qo'llanmaydi)
-        if top_cov < MIN_COVERAGE and len(query) <= SHORT_QUERY:
+        floor = MIN_COVERAGE if min_cov is None else min_cov
+        if top_cov < floor and len(query) <= SHORT_QUERY:
             return []
         out: List[Article] = []
         annex_per_act: Dict[str, int] = {}
@@ -410,9 +411,9 @@ class LawLibrary:
         return out
 
     # ---- prompt va tekshiruv ----
-    def build_context(self, query: str, k: int = 8, max_chars: int = 1800) -> Tuple[str, Set[str]]:
+    def build_context(self, query: str, k: int = 8, max_chars: int = 1800, min_cov: Optional[float] = None) -> Tuple[str, Set[str]]:
         """(kontekst matni, topilgan modda raqamlari) qaytaradi. Topilmasa ('', set())."""
-        arts = self.search(query, k=k)
+        arts = self.search(query, k=k, min_cov=min_cov)
         if not arts:
             return "", set()
         lines = [
@@ -438,10 +439,11 @@ class LawLibrary:
         lines.append("=== PARCHALAR OXIRI ===\n")
         return "\n".join(lines), nums
 
-    def augment_prompt(self, query: str, prompt: str) -> Tuple[str, Set[str]]:
-        ctx, nums = self.build_context(query)
+    def augment_prompt(self, query: str, prompt: str, note_if_empty: bool = True) -> Tuple[str, Set[str]]:
+        # Huquqiy kalit so'zsiz (oddiy) so'rovlarda kontekst faqat so'rov to'liq qamralganda qo'shiladi
+        ctx, nums = self.build_context(query, min_cov=None if note_if_empty else 0.95)
         if not ctx:
-            if not self.acts or len(query) > SHORT_QUERY:
+            if not note_if_empty or not self.acts or len(query) > SHORT_QUERY:
                 return prompt, set()
             # Kutubxonada mos parcha topilmadi: model modda raqami, muddat va miqdorni xotiradan to'qimasligi uchun ogohlantiramiz
             note = (
