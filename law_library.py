@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import re
+from collections import Counter
 from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,30 @@ MAX_QUERY_STEMS = 14
 _STOP = {
     "bilan", "necha", "mumkin", "qanday", "qancha", "uchun", "hamda", "boshqa", "kerak", "bolish", "bolad",
     "boladi", "qaysi", "qachon", "nima", "nimal", "tartib", "ularn", "ushbu", "yoki", "bolsa", "bolga",
-    "eng", "kopi", "qilis", "qilin", "etilg", "etilad", "borasi", "haqida", "togri", "boyich", "boyic",
+    "eng", "kopi", "kerakm", "mumkinm", "bormi", "nimad", "qanaqa", "qayerd", "kimlar", "qayer", "qayerga", "qanchal", "qilis", "qilin", "etilg", "etilad", "borasi", "haqida", "togri", "boyich", "boyic",
 }
+
+TITLE_LEN_PENALTY = 0.04
+TITLE_BOOST = 2.5       # so'z modda sarlavhasida bo'lsa qo'shimcha ball
+SYN_WEIGHT = 1.0        # sinonim/atama kengaytmasining og'irligi
+MIN_COVERAGE = 0.5      # eng yaxshi moddada so'rov mazmunining kamida shu ulushi topilishi shart
+
+# Hujjat nomida uchraydigan umumiy so'zlar (hujjat aytilganda mavzu so'zi hisoblanmaydi)
+_ACT_WORDS = {"kodeks", "qonun", "ozbek", "respub", "tograd", "kodeks"}
+
+# Qisqartmalar: hujjat nomida aytilsa ("MChJ to'g'risida"), mavzu so'zi hisoblanmaydi
+_ACRONYMS = {"mchj", "iiv"}
+
+# Og'zaki iboralar -> qonun matnidagi atamalar o'zaklari (o'zak: so'z qo'shimchasiz, 6 belgigacha)
+_SYNONYMS = [
+    (r"nikohn?i? bekor|ajrash|ajrim|ajralish|taloq", ["nikoh", "ajrali"]),
+    (r"ishdan (bosha|haydal|haydas|hayda|chiqar|olin|ketish)|xodimni bosh|ishdan kets", ["bekor", "tashab"]),
+    (r"ish haqi|oylik|maosh", ["mehnat", "haq"]),
+    (r"sudga (berish|bermoq|murojaat)|da.vo qilish|da.vo bilan", ["ariza", "murojaat", "davo"]),
+    (r"qarz(ni)? undir|qarzni qaytar", ["undiri", "majbur"]),
+    (r"o.?g.?ri(lik|chilik)|talon|bosqinchi", ["talon", "ogrili"]),
+    (r"ta.?til", ["tatil"]),
+]
 
 # "85-modda. Sarlavha" yoki "85-1-modda." (lotin va kirill)
 ARTICLE_RE = re.compile(r"^\s*(\d{1,4}(?:-\d{1,2})?)-(?:modda|модда)\b[\.\s:]*(.*)$", re.IGNORECASE)
@@ -71,8 +94,13 @@ def _stems(text: str) -> List[str]:
     return out
 
 
+def _token_stems(flat_text: str) -> List[str]:
+    """Matndagi so'zlarning o'zaklari (so'rovdagi o'zaklar bilan BIR XIL usulda): faqat so'z boshidan mos keladi."""
+    return [_strip_suffix(w)[:6] for w in _WORD_RE.findall(flat_text) if len(w) >= 4]
+
+
 class Article:
-    __slots__ = ("act_key", "num", "title", "text", "flat", "flat_title")
+    __slots__ = ("act_key", "num", "title", "text", "flat", "flat_title", "tf", "title_stems", "ntok")
 
     def __init__(self, act_key: str, num: Optional[str], title: str, text: str):
         self.act_key = act_key
@@ -81,6 +109,10 @@ class Article:
         self.text = text
         self.flat = _flat(text)
         self.flat_title = _flat(title)
+        toks = _token_stems(self.flat)
+        self.tf = Counter(toks)
+        self.title_stems = set(_token_stems(self.flat_title))
+        self.ntok = max(len(toks), 1)
 
 
 class Act:
@@ -248,8 +280,11 @@ class LawLibrary:
                 self.acts[act.key] = act
                 self._all.extend(act.articles)
 
+        self._df = Counter()
+        for a in self._all:
+            self._df.update(set(a.tf) | a.title_stems)
         if self._all:
-            self._avg_len = sum(len(a.flat) for a in self._all) / len(self._all)
+            self._avg_len = sum(a.ntok for a in self._all) / len(self._all)
         if self.acts:
             logger.info(f"Qonunlar kutubxonasi yuklandi: {len(self.acts)} hujjat, {len(self._all)} modda/bo'lak.")
 
@@ -261,40 +296,116 @@ class LawLibrary:
         if not self._all or not query:
             return []
         qn = _norm(query)
+        qflat = _flat(query)
         stems = [s for s in _stems(query) if s not in _STOP][:MAX_QUERY_STEMS]
         explicit = {m.group(1) for m in CITATION_RE.finditer(query)}
         mentioned = {a.key for a in self.acts.values() if any(al and al in qn for al in a.aliases)}
 
         n = len(self._all)
         avg_len = self._avg_len or 1.0
-        # Har bir o'zak qancha moddada uchrashi (idf uchun)
-        df = {s: sum(1 for a in self._all if s in a.flat) for s in stems}
-        idf = {s: math.log(1 + (n - d + 0.5) / (d + 0.5)) for s, d in df.items() if d > 0}
-        if not idf and not explicit:
+
+        def idf_of(s: str) -> float:
+            d = self._df.get(s, 0)
+            return math.log(1 + (n - d + 0.5) / (d + 0.5))
+
+        if mentioned:
+            stems = [s for s in stems if s not in _ACRONYMS]
+        matched = [s for s in stems if self._df.get(s, 0) > 0]
+        unmatched = {s for s in stems if self._df.get(s, 0) == 0}
+
+        # Hujjat nomida aytilgan, lekin matnlarda uchramaydigan qisqartma ("MChJ") mavzu so'zi emas
+        for a in self.acts.values():
+            if a.key in mentioned:
+                for al in a.aliases:
+                    if al and al in qn:
+                        unmatched -= set(_stems(al))
+
+        # Og'zaki iboralar -> qonun atamalari. Matnda uchramaydigan so'rov so'zini shu atamalar "qoplaydi"
+        rules = []   # (terms, info, floor_w)
+        for pattern, terms in _SYNONYMS:
+            m = re.search(pattern, qflat)
+            if not m:
+                continue
+            mt = m.group(0)
+            consumed = {s for s in stems if s[:4] in mt and self._df.get(s, 0) <= 2}
+            terms = [t for t in terms if self._df.get(t, 0) > 0]
+            if not terms:
+                continue
+            info = max((idf_of(s) ** 2 for s in consumed), default=0.0)
+            floor_w = 0.6 * max((idf_of(s) for s in consumed), default=0.0)
+            unmatched -= consumed
+            matched = [s for s in matched if s not in consumed]
+            rules.append((terms, info, floor_w))
+
+        if not matched and not rules and not explicit:
             return []
 
+        base = {s: idf_of(s) for s in matched}
+        info = {s: w * w for s, w in base.items()}
+        total_info = (sum(info.values()) + sum(idf_of(s) ** 2 for s in unmatched)
+                      + sum(r[1] for r in rules)) or 1.0
+        extra: Dict[str, float] = {}
+        for terms, _, floor_w in rules:
+            for t in terms:
+                if t not in base:
+                    extra[t] = max(extra.get(t, 0.0), idf_of(t) * SYN_WEIGHT, floor_w)
+
         k1, b = 1.2, 0.75
-        scored: List[Tuple[float, Article]] = []
+        scored: List[Tuple[float, float, Article]] = []
         for a in self._all:
             sc = 0.0
-            norm = 1 - b + b * (len(a.flat) / avg_len)
-            for s, w in idf.items():
-                tf = a.flat.count(s)
+            norm = 1 - b + b * (a.ntok / avg_len)
+            hit_info = 0.0
+            for s, w in base.items():
+                tf = a.tf.get(s, 0)
+                in_title = s in a.title_stems
+                if tf or in_title:
+                    hit_info += info[s]
                 if tf:
                     sc += w * (tf * (k1 + 1)) / (tf + k1 * norm)
-                if s in a.flat_title:
-                    sc += 2.5 * w
-            if sc and a.act_key in mentioned:
+                if in_title:
+                    sc += TITLE_BOOST * w
+            for s, w in extra.items():
+                tf = a.tf.get(s, 0)
+                if tf:
+                    sc += w * (tf * (k1 + 1)) / (tf + k1 * norm)
+                if s in a.title_stems:
+                    sc += TITLE_BOOST * w
+            for terms, rinfo, _fw in rules:
+                if rinfo and any((t in a.tf or t in a.title_stems) for t in terms):
+                    hit_info += rinfo
+            if sc <= 0 and not (a.num and a.num in explicit):
+                continue
+            cov = hit_info / total_info
+            sc *= (0.3 + 0.7 * cov)          # so'rov so'zlarining ko'prog'ini qamrab olgan modda yuqoriga chiqadi
+            # Maxsus toifalarga (o'rindosh, mavsumiy, uy ishchisi...) oid uzun sarlavhali moddalar umumiy qoidadan pastroq turadi
+            extra_t = len(a.title_stems - set(base) - set(extra))
+            sc /= 1 + TITLE_LEN_PENALTY * extra_t
+            if a.act_key in mentioned:
                 sc *= 1.5
             if a.num and a.num in explicit and (not mentioned or a.act_key in mentioned):
                 sc += 100
-            if sc > 0:
-                scored.append((sc, a))
+                cov = 1.0
+            scored.append((sc, cov, a))
         if not scored:
             return []
         scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[0][0]
-        return [a for sc, a in scored[:k] if sc >= top * 0.3]
+        top_sc, top_cov, _ = scored[0]
+        # Eng yaxshi moddada ham so'rovning mazmunli qismi topilmagan bo'lsa — to'qima javob bermaslik uchun bo'sh qaytaramiz
+        if top_cov < MIN_COVERAGE:
+            return []
+        out: List[Article] = []
+        annex_per_act: Dict[str, int] = {}
+        for sc, cov, a in scored:
+            if sc < top_sc * 0.3 or len(out) >= k:
+                break
+            if a.num is None and a.title.startswith("Ilova"):
+                # ilova (jadval) bo'laklari natijani to'ldirib yubormasligi uchun: bir hujjatdan ko'pi bilan 2 ta
+                if annex_per_act.get(a.act_key, 0) >= 2:
+                    continue
+                annex_per_act[a.act_key] = annex_per_act.get(a.act_key, 0) + 1
+            out.append(a)
+        return out
 
     # ---- prompt va tekshiruv ----
     def build_context(self, query: str, k: int = 8, max_chars: int = 1800) -> Tuple[str, Set[str]]:
@@ -328,7 +439,17 @@ class LawLibrary:
     def augment_prompt(self, query: str, prompt: str) -> Tuple[str, Set[str]]:
         ctx, nums = self.build_context(query)
         if not ctx:
-            return prompt, set()
+            if not self.acts:
+                return prompt, set()
+            # Kutubxonada mos parcha topilmadi: model modda raqami, muddat va miqdorni xotiradan to'qimasligi uchun ogohlantiramiz
+            note = (
+                "=== DIQQAT: rasmiy matnlar kutubxonasidan bu savolga mos parcha TOPILMADI ===\n"
+                "Qoida: modda raqami, band, muddat, jarima yoki boj miqdorini xotiradan keltirmang va taxmin qilmang. "
+                "Faqat aniq bilgan umumiy huquqiy tamoyilni tushuntiring, aniq normani qaysi hujjatdan izlash kerakligini ayting "
+                "va javob oxirida normani lex.uz da tekshirish zarurligini qayd eting.\n"
+                "=== OGOHLANTIRISH OXIRI ===\n"
+            )
+            return f"{note}\nSAVOL / TOPSHIRIQ:\n{prompt}", set()
         return f"{ctx}\nSAVOL / TOPSHIRIQ:\n{prompt}", nums
 
     def annotate(self, response: str, retrieved_nums: Set[str], lang: str = "uz") -> str:
