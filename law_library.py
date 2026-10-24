@@ -33,6 +33,7 @@ _STOP = {
 TITLE_LEN_PENALTY = 0.04
 TITLE_BOOST = 2.5       # so'z modda sarlavhasida bo'lsa qo'shimcha ball
 SYN_WEIGHT = 1.0        # sinonim/atama kengaytmasining og'irligi
+SHORT_QUERY = 300
 MIN_COVERAGE = 0.5      # eng yaxshi moddada so'rov mazmunining kamida shu ulushi topilishi shart
 
 # Hujjat nomida uchraydigan umumiy so'zlar (hujjat aytilganda mavzu so'zi hisoblanmaydi)
@@ -392,7 +393,8 @@ class LawLibrary:
         scored.sort(key=lambda x: x[0], reverse=True)
         top_sc, top_cov, _ = scored[0]
         # Eng yaxshi moddada ham so'rovning mazmunli qismi topilmagan bo'lsa — to'qima javob bermaslik uchun bo'sh qaytaramiz
-        if top_cov < MIN_COVERAGE:
+        # (uzun so'rovlarda — hujjat tayyorlash matnida — ism-familiya, manzil kabi so'zlar ko'p bo'lgani uchun bu qoida qo'llanmaydi)
+        if top_cov < MIN_COVERAGE and len(query) <= SHORT_QUERY:
             return []
         out: List[Article] = []
         annex_per_act: Dict[str, int] = {}
@@ -439,7 +441,7 @@ class LawLibrary:
     def augment_prompt(self, query: str, prompt: str) -> Tuple[str, Set[str]]:
         ctx, nums = self.build_context(query)
         if not ctx:
-            if not self.acts:
+            if not self.acts or len(query) > SHORT_QUERY:
                 return prompt, set()
             # Kutubxonada mos parcha topilmadi: model modda raqami, muddat va miqdorni xotiradan to'qimasligi uchun ogohlantiramiz
             note = (
