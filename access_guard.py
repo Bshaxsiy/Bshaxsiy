@@ -1,3 +1,6 @@
+import asyncio
+import hashlib
+import io
 import json
 import logging
 import os
@@ -34,6 +37,12 @@ class AccessGuard:
             "pending_requests": {},   # Ruxsat kutayotganlar
             "all_users": {}           # Botdan foydalangan barcha foydalanuvchilar registri
         }
+        self._fresh_start = not self.file_path.exists()
+        self._bot = None
+        self._backup_task = None
+        self._backup_lock = None
+        self._last_fp = None
+        self._last_backup_msg_id = None
         self.load()
         self._sync_env_admins()
 
@@ -59,20 +68,21 @@ class AccessGuard:
                     "added_by": "ENV_CONFIG"
                 }
                 changed = True
-        # Render kabi vaqtinchalik diskda ruxsat ro'yxati yo'qolmasligi uchun:
-        # ALLOWED_USER_IDS=id1,id2,... muhit o'zgaruvchisidagi foydalanuvchilar har ishga tushganda qayta qo'shiladi
+        # ALLOWED_USER_IDS=id1,id2,... muhit o'zgaruvchisidagi foydalanuvchilar BIR MARTA ruxsat ro'yxatiga qo'shiladi.
+        # Keyin admin ularni o'chirsa, qayta ishga tushganda qaytib kelmaydi (env_seeded orqali kuzatiladi).
+        seeded = self.data.setdefault("env_seeded", [])
         for raw in os.getenv("ALLOWED_USER_IDS", "").split(","):
             raw = raw.strip()
-            if (raw.isdigit()
-                    and raw not in self.data["allowed_users"]
-                    and raw not in self.data["blocked_users"]):
-                self.data["allowed_users"][raw] = {
-                    "name": f"Foydalanuvchi_{raw}",
-                    "username": "",
-                    "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "added_by": "ENV_CONFIG"
-                }
+            if raw.isdigit() and raw not in seeded:
+                seeded.append(raw)
                 changed = True
+                if raw not in self.data["allowed_users"] and raw not in self.data["blocked_users"]:
+                    self.data["allowed_users"][raw] = {
+                        "name": f"Foydalanuvchi_{raw}",
+                        "username": "",
+                        "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "added_by": "ENV_CONFIG"
+                    }
         if changed:
             self.save()
 
@@ -121,13 +131,147 @@ class AccessGuard:
             logger.error(f"AccessGuard ma'lumotlarini yuklashda xatolik: {e}")
 
     def save(self):
-        """ Ma'lumotlarni JSON faylga saqlash """
+        """ Ma'lumotlarni JSON faylga saqlash va (o'zgarish bo'lsa) Telegram'ga zaxiralash """
+        try:
+            fp = self._fingerprint()
+            if fp != getattr(self, "_saved_fp", None):
+                self._saved_fp = fp
+                self.data["core_updated_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")
+        except Exception:
+            pass
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.file_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"AccessGuard ma'lumotlarini saqlashda xatolik: {e}")
+        self._schedule_backup()
+
+    # ------------------------------------------------------------------
+    # Telegram'da doimiy zaxira (Render diski vaqtinchalik bo'lgani uchun)
+    # ------------------------------------------------------------------
+    BACKUP_FILENAME = "access_backup.json"
+
+    def _storage_chat_id(self) -> Optional[int]:
+        """ Zaxira saqlanadigan chat: STORAGE_CHAT_ID yoki birinchi administratorning shaxsiy chati """
+        raw = os.getenv("STORAGE_CHAT_ID", "").strip()
+        if raw.lstrip("-").isdigit():
+            return int(raw)
+        admins = list(ADMIN_IDS) or list(self.data.get("admin_ids", []))
+        return int(admins[0]) if admins else None
+
+    def _fingerprint(self) -> str:
+        """ Ruxsat huquqlariga ta'sir qiluvchi ma'lumotlarning barqaror izi (faollik vaqtlarisiz) """
+        core = {
+            "restricted_mode": self.data.get("restricted_mode", True),
+            "admins": sorted(self.data.get("admin_ids", [])),
+            "allowed": sorted(self.data.get("allowed_users", {}).keys()),
+            "blocked": sorted(self.data.get("blocked_users", {}).keys()),
+            "pending": sorted(self.data.get("pending_requests", {}).keys()),
+            "env_seeded": sorted(self.data.get("env_seeded", [])),
+        }
+        return hashlib.sha256(json.dumps(core, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def bind_bot(self, bot):
+        """ Zaxiralash uchun bot obyektini ulash """
+        self._bot = bot
+        self._backup_lock = asyncio.Lock()
+
+    def _schedule_backup(self):
+        if self._bot is None or self._fingerprint() == self._last_fp:
+            return
+        if self._backup_task is not None and not self._backup_task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._backup_task = loop.create_task(self._delayed_backup())
+
+    async def _delayed_backup(self):
+        await asyncio.sleep(3)  # ketma-ket o'zgarishlarni bitta zaxiraga birlashtirish
+        await self.backup_to_telegram()
+
+    async def backup_to_telegram(self, force: bool = False) -> bool:
+        """ Ruxsat ro'yxatini JSON hujjat sifatida administrator chatiga yuborib, qadab qo'yadi """
+        bot = self._bot
+        chat_id = self._storage_chat_id()
+        if bot is None or chat_id is None:
+            return False
+        if self._backup_lock is None:
+            self._backup_lock = asyncio.Lock()
+        async with self._backup_lock:
+            fp = self._fingerprint()
+            if not force and fp == self._last_fp:
+                return False
+            try:
+                from aiogram.types import BufferedInputFile
+                payload = json.dumps(self.data, ensure_ascii=False, indent=2).encode("utf-8")
+                msg = await bot.send_document(
+                    chat_id,
+                    BufferedInputFile(payload, filename=self.BACKUP_FILENAME),
+                    caption=("🔐 Ruxsat ro'yxatining avtomatik zaxira nusxasi.\n"
+                             "Bot qayta ishga tushganda ro'yxat shu yerdan tiklanadi. "
+                             "Bu xabarni o'chirmang va qadab (pin) qo'yilgan holda qoldiring."),
+                    disable_notification=True,
+                )
+                await bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
+                old_id = self._last_backup_msg_id
+                self._last_backup_msg_id = msg.message_id
+                self._last_fp = fp
+                if old_id and old_id != msg.message_id:
+                    try:
+                        await bot.delete_message(chat_id, old_id)
+                    except Exception:
+                        pass
+                logger.info("Ruxsat ro'yxati zaxirasi Telegram'ga saqlandi.")
+                return True
+            except Exception as e:
+                logger.warning(f"Telegram'ga zaxiralashda xatolik: {e}")
+                return False
+
+    async def restore_from_telegram(self, bot) -> bool:
+        """
+        Qadab qo'yilgan zaxira hujjatidan ruxsat ro'yxatini tiklaydi.
+        Faqat disk yangi bo'lsa (Render qayta ishga tushganda) yoki zaxira yangiroq bo'lsa qo'llanadi.
+        """
+        chat_id = self._storage_chat_id()
+        if chat_id is None:
+            return False
+        try:
+            chat = await bot.get_chat(chat_id)
+            pm = getattr(chat, "pinned_message", None)
+            doc = getattr(pm, "document", None) if pm else None
+            if not doc or doc.file_name != self.BACKUP_FILENAME:
+                logger.info("Telegram'da ruxsat ro'yxati zaxirasi topilmadi.")
+                return False
+            buf = io.BytesIO()
+            await bot.download(doc, destination=buf)
+            snap = json.loads(buf.getvalue().decode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Zaxirani Telegram'dan o'qib bo'lmadi: {e}")
+            return False
+
+        self._last_backup_msg_id = pm.message_id
+        local_ts = self.data.get("core_updated_at", "")
+        snap_ts = snap.get("core_updated_at", "")
+        if not (self._fresh_start or snap_ts > local_ts):
+            self._last_fp = self._fingerprint()
+            logger.info("Mahalliy ma'lumotlar zaxiradan yangi yoki teng — tiklash shart emas.")
+            return False
+
+        for key in ("restricted_mode", "admin_ids", "allowed_users", "blocked_users",
+                    "pending_requests", "all_users", "env_seeded"):
+            if key in snap:
+                self.data[key] = snap[key]
+        self._sync_env_admins()   # ENV adminlari va yangi ENV foydalanuvchilarini qayta tekshirish
+        self._last_fp = self._fingerprint()
+        self.save()
+        logger.info(
+            f"Ruxsat ro'yxati Telegram zaxirasidan tiklandi: "
+            f"{len(self.data['allowed_users'])} ruxsat, {len(self.data['blocked_users'])} cheklangan."
+        )
+        return True
 
     def is_admin(self, user_id: int) -> bool:
         """ Foydalanuvchi administrator ekanligini tekshirish """

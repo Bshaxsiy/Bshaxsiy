@@ -114,12 +114,16 @@ async def main():
     bot_info = await bot.get_me()
     logger.info(f"Bot muvaffaqiyatli ishga tushdi: @{bot_info.username} ({bot_info.full_name})")
 
-    # ENV orqali qo'shilgan foydalanuvchilarning ism/username'ini to'ldirish
+    # Ruxsat ro'yxatini Telegram'dagi zaxiradan tiklash (Render diski vaqtinchalik),
+    # so'ng profillarni yangilash va doimiy zaxiralashni yoqish
     try:
         from access_guard import access_guard
+        await access_guard.restore_from_telegram(bot)
         await access_guard.refresh_profiles(bot)
+        access_guard.bind_bot(bot)
+        await access_guard.backup_to_telegram()
     except Exception as e:
-        logger.warning(f"Profillarni yangilashda xatolik: {e}")
+        logger.warning(f"Ruxsat ro'yxatini tiklash/zaxiralashda xatolik: {e}")
 
     try:
         # Polling rejimida ishlash
