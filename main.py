@@ -114,6 +114,13 @@ async def main():
     bot_info = await bot.get_me()
     logger.info(f"Bot muvaffaqiyatli ishga tushdi: @{bot_info.username} ({bot_info.full_name})")
 
+    # ENV orqali qo'shilgan foydalanuvchilarning ism/username'ini to'ldirish
+    try:
+        from access_guard import access_guard
+        await access_guard.refresh_profiles(bot)
+    except Exception as e:
+        logger.warning(f"Profillarni yangilashda xatolik: {e}")
+
     try:
         # Polling rejimida ishlash
         await dp.start_polling(bot)

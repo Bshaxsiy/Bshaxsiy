@@ -76,6 +76,32 @@ class AccessGuard:
         if changed:
             self.save()
 
+    async def refresh_profiles(self, bot) -> int:
+        """
+        Muhit o'zgaruvchisidan (ALLOWED_USER_IDS) qo'shilgan foydalanuvchilarning
+        haqiqiy ism va username'ini Telegram'dan olib to'ldiradi (placeholder nomlar o'rniga).
+        """
+        updated = 0
+        for bucket in ("allowed_users", "pending_requests"):
+            for str_id, info in list(self.data.get(bucket, {}).items()):
+                if not str(info.get("name", "")).startswith("Foydalanuvchi_"):
+                    continue
+                try:
+                    chat = await bot.get_chat(int(str_id))
+                except Exception as e:
+                    logger.warning(f"Profil olinmadi ({str_id}): {e}")
+                    continue
+                full_name = " ".join(p for p in [getattr(chat, "first_name", None), getattr(chat, "last_name", None)] if p).strip()
+                if full_name:
+                    info["name"] = full_name
+                if getattr(chat, "username", None):
+                    info["username"] = chat.username
+                updated += 1
+        if updated:
+            self.save()
+            logger.info(f"Foydalanuvchi profillari yangilandi: {updated} ta")
+        return updated
+
     def load(self):
         """ Ma'lumotlarni JSON fayldan o'qish """
         try:
