@@ -264,8 +264,9 @@ class AIService:
 
         # Rasmiy matnlar kutubxonasi (laws/): mos modda parchalarini kontekst sifatida qo'shish
         lib_prompt, lib_nums = prompt, set()
-        if prompt and not image_bytes and is_legal_query(prompt):
-            lib_prompt, lib_nums = law_library.augment_prompt(prompt, prompt)
+        if prompt and not image_bytes:
+            # Huquqiy kalit so'z bo'lmasa ham (masalan, "iyna savdosi nima?"), kutubxonada ishonchli mos modda topilsa kontekst qo'shiladi
+            lib_prompt, lib_nums = law_library.augment_prompt(prompt, prompt, note_if_empty=is_legal_query(prompt))
 
         for model_name in candidates:
             chat = self._get_or_create_chat(user_id, model=model_name)
