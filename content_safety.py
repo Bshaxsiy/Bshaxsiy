@@ -94,6 +94,20 @@ RELIGIOUS_PATTERNS = [
     r"\b(injil[a-z]*|tavrot[a-z]*|zabur[a-z]*|библия|библии|евангели[а-я]*|тора|torah|bible)\b",
 ]
 
+# Yengil (kontekstga bog'liq) diniy so'zlar: «islomiy bank», «islomiy moliya standarti» kabi
+# huquqiy/moliyaviy so'rovlarda bu so'zlar diniy savol hisoblanmaydi.
+WEAK_RELIGIOUS_PATTERNS = {
+    r"\b(islom|islomiy|ислам[а-я]*|islam|islamic)\b",
+}
+
+# Huquqiy-moliyaviy kontekst belgilari (faqat yengil diniy so'zlarni istisno qilish uchun)
+LEGAL_FINANCE_CONTEXT = (
+    r"\b(bank\w*|moliya\w*|moliyalashtir\w*|murobaha|markaziy\s+bank|standart\w*|shartnoma\w*|"
+    r"kodeks\w*|qaror\w*|loyiha\w*|lizing\w*|kredit\w*|ustama\w*|nasiya\w*|komissiya\w*|"
+    r"sud\w*|da'vo\w*|talabnoma\w*|банк\w*|финанс\w*|договор\w*|кредит\w*|"
+    r"financ\w*|contract\w*|regulation\w*)\b"
+)
+
 # Istisnolar ro'yxati (False Positive larni oldini olish uchun)
 WHITELIST_EXCEPTIONS = [
     r"\bislom\s+karimov\b",
@@ -149,6 +163,8 @@ def check_content_safety(text: str) -> Tuple[SafetyViolation, Optional[str]]:
     for pattern in RELIGIOUS_PATTERNS:
         match = re.search(pattern, normalized_text, re.IGNORECASE)
         if match:
+            if pattern in WEAK_RELIGIOUS_PATTERNS and re.search(LEGAL_FINANCE_CONTEXT, normalized_text, re.IGNORECASE):
+                continue
             return SafetyViolation.RELIGIOUS, f"Diniy mavzudagi so'rov: {match.group(0)}"
 
     return SafetyViolation.NONE, None
