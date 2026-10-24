@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -53,6 +54,20 @@ class AccessGuard:
             if str_id not in self.data["allowed_users"]:
                 self.data["allowed_users"][str_id] = {
                     "name": "Super Admin",
+                    "username": "",
+                    "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "added_by": "ENV_CONFIG"
+                }
+                changed = True
+        # Render kabi vaqtinchalik diskda ruxsat ro'yxati yo'qolmasligi uchun:
+        # ALLOWED_USER_IDS=id1,id2,... muhit o'zgaruvchisidagi foydalanuvchilar har ishga tushganda qayta qo'shiladi
+        for raw in os.getenv("ALLOWED_USER_IDS", "").split(","):
+            raw = raw.strip()
+            if (raw.isdigit()
+                    and raw not in self.data["allowed_users"]
+                    and raw not in self.data["blocked_users"]):
+                self.data["allowed_users"][raw] = {
+                    "name": f"Foydalanuvchi_{raw}",
                     "username": "",
                     "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "added_by": "ENV_CONFIG"
