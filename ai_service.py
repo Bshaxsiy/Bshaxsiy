@@ -269,7 +269,13 @@ class AIService:
             # Huquqiy kalit so'z bo'lmasa ham (masalan, "iyna savdosi nima?"), kutubxonada ishonchli mos modda topilsa kontekst qo'shiladi
             lib_prompt, lib_nums = law_library.augment_prompt(prompt, prompt, note_if_empty=is_legal_query(prompt))
 
-        for model_name in candidates:
+        # Asosiy model qisqa muddatli 503 ("high demand") bersa, zaxira (sifati pastroq) modelga o'tishdan oldin bir marta qayta uriniladi
+        attempts = [candidates[0]] + candidates
+        for attempt_no, model_name in enumerate(attempts):
+            if attempt_no == 1:
+                if not ("503" in last_error or "UNAVAILABLE" in last_error or "high demand" in last_error):
+                    continue
+                await asyncio.sleep(2.5)
             chat = self._get_or_create_chat(user_id, model=model_name)
             if not chat:
                 continue

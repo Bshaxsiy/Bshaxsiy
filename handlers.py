@@ -3,6 +3,7 @@ import os
 import re
 import uuid
 import logging
+from text_format import to_telegram_html, split_html, strip_tags
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -1106,16 +1107,6 @@ def save_gemini_key_to_env(key: str):
     env_path.write_text(content, encoding="utf-8")
 
 
-def _to_telegram_markdown(text: str) -> str:
-    """Gemini matnidagi **qalin**, ### sarlavha va <b>/<i> teglarini Telegram Markdown (legacy) ko'rinishiga o'tkazadi,
-    aks holda ular xabarda xom belgi sifatida ko'rinib qoladi."""
-    t = re.sub(r"<b>(.*?)</b>", r"*\1*", text, flags=re.DOTALL)
-    t = re.sub(r"<i>(.*?)</i>", r"_\1_", t, flags=re.DOTALL)
-    t = re.sub(r"\*\*(.+?)\*\*", r"*\1*", t, flags=re.DOTALL)
-    t = re.sub(r"^\s*#{1,6}\s*(.+?)\s*$", r"*\1*", t, flags=re.MULTILINE)
-    return t
-
-
 async def send_ai_response(
     message: Message,
     response_text: str,
@@ -1135,19 +1126,16 @@ async def send_ai_response(
         return
 
     markup = reply_markup if reply_markup else (get_content_actions_keyboard(res_id, lang=lang) if res_id else None)
-    max_len = 4000
-    chunks = [response_text[i:i + max_len] for i in range(0, len(response_text), max_len)]
+    # Model Markdown ham, HTML ham yozishi mumkin: hammasini bitta (HTML) formatga keltiramiz, aks holda "**" belgilari ko'rinib qoladi
+    chunks = split_html(to_telegram_html(response_text), 3900)
 
     for idx, chunk in enumerate(chunks):
         is_last = (idx == len(chunks) - 1)
         current_markup = markup if is_last else None
         try:
-            await message.answer(_to_telegram_markdown(chunk), parse_mode="Markdown", reply_markup=current_markup)
+            await message.answer(chunk, parse_mode="HTML", reply_markup=current_markup)
         except TelegramBadRequest:
-            try:
-                await message.answer(chunk, parse_mode="HTML", reply_markup=current_markup)
-            except TelegramBadRequest:
-                await message.answer(chunk, parse_mode=None, reply_markup=current_markup)
+            await message.answer(strip_tags(chunk), parse_mode=None, reply_markup=current_markup)
 
 
 # =====================================================================

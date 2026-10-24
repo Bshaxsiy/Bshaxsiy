@@ -51,6 +51,7 @@ _SYNONYMS = [
     (r"qarz(ni)? undir|qarzni qaytar", ["undiri", "majbur"]),
     (r"o.?g.?ri(lik|chilik)|talon|bosqinchi", ["talon", "ogrili"]),
     (r"ta.?til", ["tatil"]),
+    (r"mulk huquq\w* .{0,25}(tugat|tugay|tugash|to.xta|yoqol)", ["bekor", "bolish"], ("tugat", "tugay", "tugas", "toxta", "yoqol")),
 ]
 
 # "85-modda. Sarlavha" yoki "85-1-modda." (lotin va kirill)
@@ -77,6 +78,9 @@ _SUFFIXES = ("laridan", "larning", "larini", "lariga", "larida", "ining", "larda
              "ini", "iga", "ida", "idan", "lar", "ga", "da", "ni", "dan", "si", "ri", "i")
 
 
+_POSS = ("sining", "sidan", "sini", "sida", "siga", "si")
+
+
 def _strip_suffix(w: str) -> str:
     for suf in _SUFFIXES:
         if w.endswith(suf) and len(w) - len(suf) >= 3:
@@ -97,7 +101,17 @@ def _stems(text: str) -> List[str]:
 
 def _token_stems(flat_text: str) -> List[str]:
     """Matndagi so'zlarning o'zaklari (so'rovdagi o'zaklar bilan BIR XIL usulda): faqat so'z boshidan mos keladi."""
-    return [_strip_suffix(w)[:6] for w in _WORD_RE.findall(flat_text) if len(w) >= 4]
+    out: List[str] = []
+    for w in _WORD_RE.findall(flat_text):
+        if len(w) < 4:
+            continue
+        out.append(_strip_suffix(w)[:6])
+        # egalik qo'shimchali shakl ("arizasi", "arizasini"): "ariza" o'zagi ham indekslanadi, shunda so'rovdagi har ikki shakl mos keladi
+        for suf in _POSS:
+            if w.endswith(suf) and len(w) - len(suf) >= 3:
+                out.append(w[: -len(suf)][:6])
+                break
+    return out
 
 
 class Article:
@@ -323,12 +337,15 @@ class LawLibrary:
 
         # Og'zaki iboralar -> qonun atamalari. Matnda uchramaydigan so'rov so'zini shu atamalar "qoplaydi"
         rules = []   # (terms, info, floor_w)
-        for pattern, terms in _SYNONYMS:
+        for entry in _SYNONYMS:
+            pattern, terms = entry[0], entry[1]
+            replace = entry[2] if len(entry) > 2 else ()
             m = re.search(pattern, qflat)
             if not m:
                 continue
             mt = m.group(0)
-            consumed = {s for s in stems if s[:4] in mt and self._df.get(s, 0) <= 2}
+            consumed = {s for s in stems
+                        if (s[:4] in mt and self._df.get(s, 0) <= 2) or (replace and s.startswith(replace))}
             terms = [t for t in terms if self._df.get(t, 0) > 0]
             if not terms:
                 continue
